@@ -259,7 +259,7 @@ struct Elf32_Phdr {
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
-static bool setup_stack(void** esp);
+static bool setup_stack(void** esp, const char* file_name);
 static bool validate_segment(const struct Elf32_Phdr*, struct file*);
 static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t read_bytes,
                          uint32_t zero_bytes, bool writable);
@@ -348,7 +348,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   }
 
   /* Set up stack. */
-  if (!setup_stack(esp))
+  if (!setup_stack(esp, file_name))
     goto done;
 
   /* Start address. */
@@ -465,7 +465,7 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t 
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool setup_stack(void** esp) {
+static bool setup_stack(void** esp, const char* file_name) {
   uint8_t* kpage;
   bool success = false;
 
@@ -477,6 +477,45 @@ static bool setup_stack(void** esp) {
     else
       palloc_free_page(kpage);
   }
+
+  /* Conduct Argument Passing Algorithm. */
+  int argc = 0;
+  char* argv[162];
+  char* token;
+  char temp[strlen(file_name) + 1];
+  strlcpy(temp, file_name, strlen(file_name) + 1);
+  char* rest = temp;
+  
+  while ((token = strtok_r(rest, " ", &rest))) {
+    *esp -= strlen(token) + 1;
+    *(char *)*esp = token;
+    argv[argc] = *esp;
+    argc++;
+  }
+
+  // Add null bytes such that (num_null + 12 + 4 * argc) % 16) == 0
+  // 16 - ((12 + 4 * argc) % 16) == num_null
+  int num_null = 16 - ((12 + 4 * argc - ((int)*esp % 16)) % 16);
+  if (num_null != 0) {
+    for (int i = 0; i < num_null; i++) {
+      *esp -= 1;
+      *(char *)*esp = '\0';
+    }
+  }
+
+  *esp -= 4;
+  *(char *)*esp = NULL;
+  for (int i = argc - 1; i >= 0; i--) {
+    *esp -= 4;
+    *(char *)*esp = argv[i];
+  }
+  *esp -= 4;
+  *(char *)*esp = argv;
+  *esp -= 4;
+  *(int *)*esp = argc;
+  *esp -= 4;
+  *(int *)*esp = 0;
+
   return success;
 }
 
