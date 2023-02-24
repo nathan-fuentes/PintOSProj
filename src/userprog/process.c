@@ -20,11 +20,31 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+struct pthread_mutex *glob_lock;
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 bool setup_thread(void (**eip)(void), void** esp);
+
+typedef struct start_args {
+  shared_data_t* shared_data;
+  const char* file_name;
+} start_args_t;
+
+bool validity_check(char* address) {
+  if (address == NULL) {
+    return false;
+  }
+  uint32_t* page_directory = thread_current()->pcb->pagedir;
+  if (lookup_page(page_directory, (void *) address, false) == NULL) {
+    return false;
+  } 
+  if (address > PHYS_BASE - 4) {
+    return false;
+  }
+  return true;
+}
 
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
@@ -71,8 +91,11 @@ pid_t process_execute(const char* file_name) {
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process(void* file_name_) {
-  char* file_name = (char*)file_name_;
+static void start_process(void* args) {
+  // TODO: Assign file_name and shared_data from args
+  start_args_t* sa = (start_args_t *) args;
+  shared_data_t* shared_data = sa->shared_data;
+  char* file_name = sa->file_name;
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;

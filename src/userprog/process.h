@@ -27,8 +27,19 @@ struct process {
   uint32_t* pagedir;          /* Page directory. */
   char process_name[16];      /* Name of the main thread */
   struct thread* main_thread; /* Pointer to main thread */
+  shared_data_t* shared_data; /* Connects this process to its parent (if it has one) */
+  struct list child_list;     /* List of shared_data* with child processes */
+  struct pthread_mutex* lock;       /* Used for critical sections (ex: process's pagedir) */
 };
 
+typedef struct shared_data {
+  struct semaphore sema;         /* Used for scheduled waiting */
+  struct pthread_mutex* lock;    /* Used for critical sections (ex: ref_cnt) */
+  int ref_cnt;                   /* Used to keep track of num threads referencing this struct */
+  int status;                    /* Used to keep track of exit status */
+  pid_t pid;                     /* Helps parent identify specific child */
+  struct list_elem elem;         /* Necessary for list implementationte */
+} shared_data_t;
 void userprog_init(void);
 
 pid_t process_execute(const char* file_name);
