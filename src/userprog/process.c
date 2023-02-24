@@ -32,6 +32,8 @@ typedef struct start_args {
   const char* file_name;
 } start_args_t;
 
+/* Checks if a given address is null, invalid, or pointing to 
+   kernel memory, returning true (valid) if none apply */
 bool validity_check(char* address) {
   if (address == NULL) {
     return false;
@@ -44,6 +46,14 @@ bool validity_check(char* address) {
     return false;
   }
   return true;
+}
+
+void init_shared_data(shared_data_t* shared_data) {
+  sem_init(&(shared_data->sema));
+  pthread_mutex_init(shared_data->lock);
+  shared_data->ref_cnt = 2;
+  shared_data->status = 0;
+  shared_data->pid = thread_current()->tid;
 }
 
 /* Initializes user programs in the system by ensuring the main
