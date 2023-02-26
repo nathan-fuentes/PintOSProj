@@ -77,6 +77,9 @@ static void locate_block_device(enum block_type, const char* name);
 int main(void) {
   char** argv;
 
+  /* Initialize syscall global lock. */
+  lock_init(glob_lock);
+
   /* Clear BSS. */
   bss_init();
 

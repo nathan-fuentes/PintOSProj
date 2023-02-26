@@ -110,7 +110,9 @@ pid_t process_execute(const char* file_name) {
     palloc_free_page(fn_copy);
     // Free shared data struct
     free(shared_data);
+    return tid;
   }
+  list_push_back(&(thread_current()->pcb->child_list), &(shared_data->elem));
   return tid; // May need to return TID from shared_data struct instead
 }
 

@@ -5,8 +5,8 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "threads/vaddr.h"
+#include "threads/init.h"
 
-struct lock *glob_lock;
 
 /* Given a list of fd_maps and a fd, finds a file associated 
    with the given fd, returning NULL if none was found. */
@@ -117,7 +117,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if (validity_check(&args[1]) && validity_check(&args[2]) && validity_check(args[2]) && validity_check(&args[3])) {
         if (args[1] == 1) {
           // TODO: Account for large buffer sizes
+          lock_acquire(glob_lock);
           putbuf(args[2], args[3]);
+          lock_release(glob_lock);
         } // TODO: Else case for not stdout
       } else {
         f->eax = -1;

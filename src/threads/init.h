@@ -8,5 +8,6 @@
 
 /* Page directory with kernel mappings only. */
 extern uint32_t* init_page_dir;
+struct lock* glob_lock;
 
 #endif /* threads/init.h */
