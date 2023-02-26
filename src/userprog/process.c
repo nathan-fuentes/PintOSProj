@@ -23,7 +23,7 @@
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
-static bool load(const char* file_name, void (**eip)(void), void** esp);
+static bool load(const char* file_name, void (**eip)(void), void** esp, const char* command);
 bool setup_thread(void (**eip)(void), void** esp);
 
 typedef struct start_args {
@@ -65,6 +65,8 @@ void userprog_init(void) {
      page directory) when t->pcb is assigned, because a timer interrupt
      can come at any time and activate our pagedir */
   t->pcb = calloc(sizeof(struct process), 1);
+  list_init(&(t->pcb->child_list));
+  list_init(&(t->pcb->fd_list));
   success = t->pcb != NULL;
 
   /* Kill the kernel if we did not succeed */
@@ -105,7 +107,7 @@ pid_t process_execute(const char* file_name) {
   }
   sema_down(&(shared_data->sema));
   free(start_args); 
-  tid = shared_data->pid;
+  // tid = shared_data->pid; // TODO: See why this causes the following palloc_free_page to error
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
     // Free shared data struct
@@ -121,7 +123,16 @@ pid_t process_execute(const char* file_name) {
 static void start_process(void* args) {
   start_args_t* sa = (start_args_t *) args;
   shared_data_t* shared_data = sa->shared_data;
-  const char* file_name = sa->file_name;
+  const char* og_file_name = sa->file_name;
+  
+  char temp[strlen(og_file_name) + 1];
+  strlcpy(temp, og_file_name, strlen(og_file_name) + 1);
+  char* rest = temp;
+  const char* file_name = strtok_r(rest, " ", &rest);
+  char temp2[strlen(og_file_name) + 1];
+  strlcpy(temp2, og_file_name, strlen(og_file_name) + 1);
+  const char* command = temp2;
+
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;
@@ -144,7 +155,7 @@ static void start_process(void* args) {
 
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
-    strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+    strlcpy(t->pcb->process_name, file_name, strlen(file_name) + 1); // May need to replace file_name with t->name, that's what it OG was
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -153,7 +164,7 @@ static void start_process(void* args) {
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
-    success = load(file_name, &if_.eip, &if_.esp);
+    success = load(file_name, &if_.eip, &if_.esp, command);
   }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
@@ -167,11 +178,11 @@ static void start_process(void* args) {
   }
 
   /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(file_name);
+  palloc_free_page(og_file_name);
   if (!success) {
     // Update shared data with relevant info
-    t->pcb->shared_data->pid = TID_ERROR;
-    sema_up(&(t->pcb->shared_data->sema));
+    shared_data->pid = TID_ERROR;
+    sema_up(&(shared_data->sema));
     thread_exit();
   }
 
@@ -316,7 +327,7 @@ struct Elf32_Phdr {
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
-static bool setup_stack(void** esp, const char* file_name);
+static bool setup_stack(void** esp, const char* command);
 static bool validate_segment(const struct Elf32_Phdr*, struct file*);
 static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t read_bytes,
                          uint32_t zero_bytes, bool writable);
@@ -325,7 +336,7 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t 
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
-bool load(const char* file_name, void (**eip)(void), void** esp) {
+bool load(const char* file_name, void (**eip)(void), void** esp, const char* command) {
   struct thread* t = thread_current();
   struct Elf32_Ehdr ehdr;
   struct file* file = NULL;
@@ -405,7 +416,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   }
 
   /* Set up stack. */
-  if (!setup_stack(esp, file_name))
+  if (!setup_stack(esp, command))
     goto done;
 
   /* Start address. */
@@ -522,7 +533,7 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t 
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool setup_stack(void** esp, const char* file_name) {
+static bool setup_stack(void** esp, const char* command) {
   uint8_t* kpage;
   bool success = false;
 
@@ -539,8 +550,8 @@ static bool setup_stack(void** esp, const char* file_name) {
   int argc = 0;
   char* argv[162];
   char* token;
-  char temp[strlen(file_name) + 1];
-  strlcpy(temp, file_name, strlen(file_name) + 1);
+  char temp[strlen(command) + 1];
+  strlcpy(temp, command, strlen(command) + 1);
   char* rest = temp;
   
   while ((token = strtok_r(rest, " ", &rest))) {

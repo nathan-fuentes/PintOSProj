@@ -5,7 +5,6 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "threads/vaddr.h"
-#include "threads/init.h"
 
 
 /* Given a list of fd_maps and a fd, finds a file associated 
@@ -32,13 +31,13 @@ bool validity_check(void* address) {
   if (address == NULL) {
     return false;
   }
+  if (address > PHYS_BASE - 4) {
+    return false;
+  }
   uint32_t* page_directory = thread_current()->pcb->pagedir;
   if (lookup_page(page_directory, address, false) == NULL) {
     return false;
   } 
-  if (address > PHYS_BASE - 4) {
-    return false;
-  }
   return true;
 }
 
@@ -57,7 +56,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   switch (args[0]) {
     
     case SYS_PRACTICE:
-      if (validity_check(&args[1])) {
+      if (validity_check(&args[0]) && validity_check(&args[1])) {
         *(int *)(&(args[1])) = args[1] + 1;
         f->eax = args[1];
       } else {
@@ -72,7 +71,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
 
     case SYS_EXIT:
-      if (validity_check(&args[1])) {
+      if (validity_check(&args[0]) && validity_check(&args[1])) {
         f->eax = args[1];
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
         process_exit();
@@ -84,7 +83,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
 
     case SYS_EXEC:
-      if (validity_check(&args[1]) && validity_check(args[1])) {
+      if (validity_check(&args[0]) && validity_check(&args[1]) && validity_check(args[1])) {
         lock_acquire(glob_lock);
         f->eax = process_execute(args[1]);
         lock_release(glob_lock);
@@ -114,7 +113,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
 
     case SYS_WRITE:
-      if (validity_check(&args[1]) && validity_check(&args[2]) && validity_check(args[2]) && validity_check(&args[3])) {
+      if (validity_check(&args[0]) && validity_check(&args[1]) && validity_check(&args[2]) && validity_check(args[2]) && validity_check(&args[3])) {
         if (args[1] == 1) {
           // TODO: Account for large buffer sizes
           lock_acquire(glob_lock);

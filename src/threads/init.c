@@ -77,9 +77,6 @@ static void locate_block_device(enum block_type, const char* name);
 int main(void) {
   char** argv;
 
-  /* Initialize syscall global lock. */
-  lock_init(glob_lock);
-
   /* Clear BSS. */
   bss_init();
 
@@ -124,6 +121,12 @@ int main(void) {
 #ifdef USERPROG
   /* Give main thread a minimal PCB so it can launch the first process */
   userprog_init();
+#endif
+
+#ifdef USERPROG
+  /* Initialize syscall global lock. */
+  glob_lock = (struct lock*) calloc(sizeof(struct lock), 1); // TODO: If possible change this so it's on the stack so don't need to worry about freeing
+  lock_init(glob_lock);
 #endif
 
 #ifdef FILESYS
