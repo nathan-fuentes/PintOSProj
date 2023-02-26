@@ -20,7 +20,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-struct pthread_mutex *glob_lock;
+struct lock *glob_lock;
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
@@ -49,8 +49,8 @@ bool validity_check(char* address) {
 }
 
 void init_shared_data(shared_data_t* shared_data) {
-  sem_init(&(shared_data->sema));
-  pthread_mutex_init(shared_data->lock);
+  sema_init(&(shared_data->sema), 0);
+  lock_init(shared_data->lock);
   shared_data->ref_cnt = 2;
   shared_data->status = 0;
   shared_data->pid = thread_current()->tid;
@@ -92,8 +92,13 @@ pid_t process_execute(const char* file_name) {
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
+  /* Create an arguments struct for start_process. */
+  start_args_t* start_args = (start_args_t *)calloc(sizeof(start_args_t), 1);
+  start_args->file_name = fn_copy;
+  start_args->shared_data = (shared_data_t *)calloc(sizeof(shared_data_t), 1);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create(file_name, PRI_DEFAULT, start_process, start_args);
   if (tid == TID_ERROR)
     palloc_free_page(fn_copy);
   return tid;
@@ -105,7 +110,7 @@ static void start_process(void* args) {
   // TODO: Assign file_name and shared_data from args
   start_args_t* sa = (start_args_t *) args;
   shared_data_t* shared_data = sa->shared_data;
-  char* file_name = sa->file_name;
+  const char* file_name = sa->file_name;
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;

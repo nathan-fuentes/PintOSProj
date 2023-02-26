@@ -19,7 +19,7 @@ typedef void (*stub_fun)(pthread_fun, void*);
 
 typedef struct shared_data {
   struct semaphore sema;         /* Used for scheduled waiting */
-  struct pthread_mutex* lock;    /* Used for critical sections (ex: ref_cnt) */
+  struct lock* lock;    /* Used for critical sections (ex: ref_cnt) */
   int ref_cnt;                   /* Used to keep track of num threads referencing this struct */
   int status;                    /* Used to keep track of exit status */
   pid_t pid;                     /* Helps parent identify specific child */
