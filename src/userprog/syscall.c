@@ -6,12 +6,28 @@
 #include "userprog/process.h"
 #include "threads/vaddr.h"
 
+struct lock *glob_lock;
+
+/* Given a list of fd_maps and a fd, finds a file associated 
+   with the given fd, returning NULL if none was found. */
+struct file* find_file(struct list* file_list, int fd) {
+  struct list_elem *e;
+
+  for (e = list_begin(file_list); e != list_end(file_list); e = list_next(e)) {
+    fd_map_t* fd_map = list_entry(e, fd_map_t, elem);
+    if (fd == fd_map->fd) {
+      return fd_map->file;
+    }
+  }
+  return NULL;
+}
+
 static void syscall_handler(struct intr_frame*);
 
 void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
 
 /* Checks if a given address is null, invalid, or pointing to 
-   kernel memory, returning true (valid) if none apply */
+   kernel memory, returning true (valid) if none apply. */
 bool validity_check(void* address) {
   if (address == NULL) {
     return false;
@@ -38,17 +54,85 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   /* printf("System call number: %d\n", args[0]); */
 
-  if (args[0] == SYS_EXIT) {
-    f->eax = args[1];
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-    process_exit();
-  } else if (args[0] == SYS_PRACTICE) {
-    if (validity_check(&args[1])) {
-      *(int *)(&(args[1])) = args[1] + 1;
-      f->eax = args[1];
-    } else {
-      printf("Error: Invalid address given.");
-      process_exit();
-    }
+  switch (args[0]) {
+    
+    case SYS_PRACTICE:
+      if (validity_check(&args[1])) {
+        *(int *)(&(args[1])) = args[1] + 1;
+        f->eax = args[1];
+      } else {
+        f->eax = -1;
+        printf("Error: Invalid address given.");
+        process_exit();
+      }
+      break;
+
+    case SYS_HALT:
+      shutdown_power_off();
+      break;
+
+    case SYS_EXIT:
+      if (validity_check(&args[1])) {
+        f->eax = args[1];
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
+        process_exit();
+      } else {
+        f->eax = -1;
+        printf("Error: Invalid address given.");
+        process_exit();
+      }
+      break;
+
+    case SYS_EXEC:
+      if (validity_check(&args[1]) && validity_check(args[1])) {
+        lock_acquire(glob_lock);
+        f->eax = process_execute(args[1]);
+        lock_release(glob_lock);
+      } else {
+        f->eax = -1;
+        printf("Error: Invalid address given.");
+        process_exit();
+      }
+      break;
+
+    case SYS_WAIT:
+      break;
+
+    case SYS_CREATE:
+      break;
+
+    case SYS_REMOVE:
+      break;
+
+    case SYS_OPEN:
+      break;
+
+    case SYS_FILESIZE:
+      break;
+
+    case SYS_READ:
+      break;
+
+    case SYS_WRITE:
+      if (validity_check(&args[1]) && validity_check(&args[2]) && validity_check(args[2]) && validity_check(&args[3])) {
+        if (args[1] == 1) {
+          // TODO: Account for large buffer sizes
+          putbuf(args[2], args[3]);
+        } // TODO: Else case for not stdout
+      } else {
+        f->eax = -1;
+        printf("Error: Invalid address given.");
+        process_exit();
+      }
+      break;
+
+    case SYS_SEEK:
+      break;
+
+    case SYS_TELL:
+      break;
+
+    case SYS_CLOSE:
+      break;
   }
 }

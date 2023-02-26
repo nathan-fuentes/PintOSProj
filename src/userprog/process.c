@@ -20,7 +20,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-struct lock *glob_lock;
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
@@ -80,7 +79,6 @@ pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
 
-  sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
@@ -89,27 +87,36 @@ pid_t process_execute(const char* file_name) {
   strlcpy(fn_copy, file_name, PGSIZE);
 
   /* TODO: Add an entry to child_list. */
+  shared_data_t* shared_data = (shared_data_t *) calloc(sizeof(shared_data_t), 1);
+  init_shared_data(shared_data);
 
   /* Create an arguments struct for start_process. */
   start_args_t* start_args = (start_args_t *)calloc(sizeof(start_args_t), 1);
   start_args->file_name = fn_copy;
-  start_args->shared_data = (shared_data_t *)calloc(sizeof(shared_data_t), 1);
-  init_shared_data(start_args->shared_data);
+  start_args->shared_data = shared_data;
 
   /* Create a new thread to execute FILE_NAME. */
-  thread_create(file_name, PRI_DEFAULT, start_process, start_args);
-  // sema_down(&(start_args->shared_data->sema));
-  tid = start_args->shared_data->pid;
-  if (tid == TID_ERROR)
-  // Free shared data struct
+  tid = thread_create(file_name, PRI_DEFAULT, start_process, start_args);
+  if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
+    // Free shared data struct
+    free(shared_data);
+    return tid;
+  }
+  sema_down(&(shared_data->sema));
+  free(start_args); 
+  tid = shared_data->pid;
+  if (tid == TID_ERROR) {
+    palloc_free_page(fn_copy);
+    // Free shared data struct
+    free(shared_data);
+  }
   return tid; // May need to return TID from shared_data struct instead
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* args) {
-  // TODO: Assign file_name and shared_data from args
   start_args_t* sa = (start_args_t *) args;
   shared_data_t* shared_data = sa->shared_data;
   const char* file_name = sa->file_name;
@@ -127,6 +134,11 @@ static void start_process(void* args) {
     // does not try to activate our uninitialized pagedir
     new_pcb->pagedir = NULL;
     t->pcb = new_pcb;
+    t->pcb->shared_data = shared_data;
+    list_init(&(t->pcb->child_list));
+    t->pcb->shared_data->pid = t->tid;
+    t->pcb->fd_tracker = 3;
+    list_init(&(t->pcb->fd_list));
 
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
@@ -156,7 +168,8 @@ static void start_process(void* args) {
   palloc_free_page(file_name);
   if (!success) {
     // Update shared data with relevant info
-    sema_up(&temporary);
+    t->pcb->shared_data->pid = TID_ERROR;
+    sema_up(&(t->pcb->shared_data->sema));
     thread_exit();
   }
 
@@ -166,6 +179,7 @@ static void start_process(void* args) {
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
+  sema_up(&(t->pcb->shared_data->sema));
   asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
   NOT_REACHED();
 }
@@ -180,7 +194,7 @@ static void start_process(void* args) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(pid_t child_pid UNUSED) {
-  sema_down(&temporary);
+  // sema_down(&temporary);
   return 0;
 }
 
@@ -219,7 +233,7 @@ void process_exit(void) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  sema_up(&temporary);
+  // sema_up(&temporary);
   thread_exit();
 }
 

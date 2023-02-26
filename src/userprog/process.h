@@ -26,6 +26,12 @@ typedef struct shared_data {
   struct list_elem elem;         /* Necessary for list implementationte */
 } shared_data_t;
 
+typedef struct fd_map {
+  int fd;                   /* "Key" file descriptor */
+  struct file* file;        /* "Value" file pointer */
+  struct list_elem elem;    /* Necessary for list implementation */
+} fd_map_t;
+
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
    PCB from the TCB. All TCBs in a process will have a pointer
@@ -39,6 +45,8 @@ struct process {
   shared_data_t* shared_data; /* Connects this process to its parent (if it has one) */
   struct list child_list;     /* List of shared_data* with child processes */
   struct lock* lock;          /* Used for critical sections (ex: process's pagedir), not needed until Project 2 */
+  struct list fd_list;        /* Ptr to file descriptor list struct */
+  int fd_tracker;             /* Global file descriptor "counter" */
 };
 
 void userprog_init(void);
