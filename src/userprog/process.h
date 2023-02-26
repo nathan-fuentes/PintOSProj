@@ -19,7 +19,7 @@ typedef void (*stub_fun)(pthread_fun, void*);
 
 typedef struct shared_data {
   struct semaphore sema;         /* Used for scheduled waiting */
-  struct lock* lock;    /* Used for critical sections (ex: ref_cnt) */
+  struct lock lock;             /* Used for critical sections (ex: ref_cnt) */
   int ref_cnt;                   /* Used to keep track of num threads referencing this struct */
   int status;                    /* Used to keep track of exit status */
   pid_t pid;                     /* Helps parent identify specific child */
@@ -38,7 +38,7 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   shared_data_t* shared_data; /* Connects this process to its parent (if it has one) */
   struct list child_list;     /* List of shared_data* with child processes */
-  struct pthread_mutex* lock;       /* Used for critical sections (ex: process's pagedir) */
+  struct lock* lock;          /* Used for critical sections (ex: process's pagedir), not needed until Project 2 */
 };
 
 void userprog_init(void);

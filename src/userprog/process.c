@@ -32,28 +32,24 @@ typedef struct start_args {
   const char* file_name;
 } start_args_t;
 
-/* Checks if a given address is null, invalid, or pointing to 
-   kernel memory, returning true (valid) if none apply */
-bool validity_check(char* address) {
-  if (address == NULL) {
-    return false;
-  }
-  uint32_t* page_directory = thread_current()->pcb->pagedir;
-  if (lookup_page(page_directory, (void *) address, false) == NULL) {
-    return false;
-  } 
-  if (address > PHYS_BASE - 4) {
-    return false;
-  }
-  return true;
-}
-
 void init_shared_data(shared_data_t* shared_data) {
   sema_init(&(shared_data->sema), 0);
-  lock_init(shared_data->lock);
+  lock_init(&(shared_data->lock));
   shared_data->ref_cnt = 2;
   shared_data->status = 0;
   shared_data->pid = thread_current()->tid;
+}
+
+shared_data_t* find_shared_data(struct list* data_list, pid_t pid) {
+  struct list_elem *e;
+
+  for (e = list_begin(data_list); e != list_end(data_list); e = list_next(e)) {
+    shared_data_t* shared_data = list_entry(e, shared_data_t, elem);
+    if (pid == shared_data->pid) {
+      return shared_data;
+    }
+  }
+  return NULL;
 }
 
 /* Initializes user programs in the system by ensuring the main
@@ -92,16 +88,22 @@ pid_t process_execute(const char* file_name) {
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
+  /* TODO: Add an entry to child_list. */
+
   /* Create an arguments struct for start_process. */
   start_args_t* start_args = (start_args_t *)calloc(sizeof(start_args_t), 1);
   start_args->file_name = fn_copy;
   start_args->shared_data = (shared_data_t *)calloc(sizeof(shared_data_t), 1);
+  init_shared_data(start_args->shared_data);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, start_args);
+  thread_create(file_name, PRI_DEFAULT, start_process, start_args);
+  // sema_down(&(start_args->shared_data->sema));
+  tid = start_args->shared_data->pid;
   if (tid == TID_ERROR)
+  // Free shared data struct
     palloc_free_page(fn_copy);
-  return tid;
+  return tid; // May need to return TID from shared_data struct instead
 }
 
 /* A thread function that loads a user process and starts it
@@ -153,6 +155,7 @@ static void start_process(void* args) {
   /* Clean up. Exit on failure or jump to userspace */
   palloc_free_page(file_name);
   if (!success) {
+    // Update shared data with relevant info
     sema_up(&temporary);
     thread_exit();
   }
@@ -525,8 +528,10 @@ static bool setup_stack(void** esp, const char* file_name) {
   char* rest = temp;
   
   while ((token = strtok_r(rest, " ", &rest))) {
-    *esp -= strlen(token) + 1;
-    *(char *)*esp = token;
+    *esp -= 1;
+    *(char *)*esp = '\0';
+    *esp -= strlen(token);
+    memcpy(*esp, token, strlen(token));
     argv[argc] = *esp;
     argc++;
   }
@@ -545,10 +550,11 @@ static bool setup_stack(void** esp, const char* file_name) {
   *(char *)*esp = NULL;
   for (int i = argc - 1; i >= 0; i--) {
     *esp -= 4;
-    *(char *)*esp = argv[i];
+    memcpy(*esp, &(argv[i]), sizeof(char*));
   }
+  char* argv_start = (char*)*esp; // Courtesy of Ed
   *esp -= 4;
-  *(char *)*esp = argv;
+  memcpy(*esp, &argv_start, sizeof(char*));
   *esp -= 4;
   *(int *)*esp = argc;
   *esp -= 4;
