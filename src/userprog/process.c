@@ -283,7 +283,11 @@ void process_exit(int status) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  sema_up(&(shared_data->sema));
+  if (shared_data->ref_cnt == 0) {
+    free(shared_data);
+  } else {
+    sema_up(&(shared_data->sema));
+  }
   thread_exit();
 }
 
