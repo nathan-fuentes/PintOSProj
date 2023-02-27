@@ -207,13 +207,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
           lock_acquire(glob_lock);
           char* result;
           uint8_t curr_key;
+          int size = 1;
           while ((curr_key = input_getc()) != -1) { // Change to EOF if possible
             char curr_char = (char) curr_key;
             strlcpy(result, curr_char, 1);
+            size++;
           }
           strlcpy(result, "\0", 1);
           args[2] = result;
           lock_release(glob_lock);
+          f->eax = size;
         }
       } else {
         f->eax = -1;
