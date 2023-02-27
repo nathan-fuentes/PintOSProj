@@ -28,6 +28,7 @@ void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "
 
 /* Checks if a given address is null, invalid, or pointing to 
    kernel memory, returning true (valid) if none apply. */
+// TODO: Implement proper string checking (longer than 4 bytes)
 bool validity_check(void* addr) {
   for (int i = 0; i < 4; i++) {
     char* address = ((char *) addr) + i;
@@ -45,8 +46,14 @@ bool validity_check(void* addr) {
   return true;
 }
 
-static void syscall_handler(struct intr_frame* f UNUSED) {
+static void syscall_handler(struct intr_frame* f) {
   uint32_t* args = ((uint32_t*)f->esp);
+
+  if (!validity_check(args)) {
+    f->eax = -1;
+    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+    process_exit(-1);
+  }
 
   /*
    * The following print statement, if uncommented, will print out the syscall
