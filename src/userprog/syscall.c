@@ -78,15 +78,25 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       if (validity_check(&args[0]) && validity_check(&args[1])) {
         struct list_elem *e;
         struct list* file_list = &(thread_current()->pcb->fd_list);
+        e = list_begin(file_list);
+        while (e != list_end(file_list)) {
+          fd_map_t* fd_map = list_entry(e, fd_map_t, elem);
+          lock_acquire(glob_lock);
+          file_close(fd_map->file);
+          lock_release(glob_lock);
+          e = list_next(e);
+          list_remove(&(fd_map->elem));
+          free(fd_map);
+        }
 
-        for (e = list_begin(file_list); e != list_end(file_list); e = list_next(e)) {
+        /*for (e = list_begin(file_list); e != list_end(file_list); e = list_next(e)) {
           fd_map_t* fd_map = list_entry(e, fd_map_t, elem);
           lock_acquire(glob_lock);
           file_close(fd_map->file);
           lock_release(glob_lock);
           list_remove(&(fd_map->elem));
           free(fd_map);
-        }
+        }*/
         // free(file_list); // TODO: If implement this, make sure to calloc file_list AND child_list
 
         f->eax = args[1];
@@ -156,6 +166,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
           fd_map->fd = fd;
           thread_current()->pcb->fd_tracker++;
           fd_map->file = file;
+          list_push_back(&(thread_current()->pcb->fd_list), &(fd_map->elem));
         }
         lock_release(glob_lock);
         f->eax = fd;
@@ -305,6 +316,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
               file_close(file);
               list_remove(&(fd_map->elem));
               lock_release(glob_lock);
+              free(fd_map);
             }
       } else {
           f->eax = -1;
