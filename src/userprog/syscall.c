@@ -34,11 +34,11 @@ bool validity_check(void* addr) {
     if (address == NULL) {
       return false;
     }
-    if (is_kernel_vaddr(address)) {
+    if (!is_user_vaddr((void *) address)) {
       return false;
     }
     uint32_t* page_directory = thread_current()->pcb->pagedir;
-    if (pagedir_get_page(page_directory, address) == NULL) {
+    if (pagedir_get_page(page_directory, (void*) address) == NULL) {
       return false;
     } 
   }
