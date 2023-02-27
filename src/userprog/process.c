@@ -107,10 +107,9 @@ pid_t process_execute(const char* file_name) {
   }
   sema_down(&(shared_data->sema));
   free(start_args); 
-  // tid = shared_data->pid; // TODO: See why this causes the following palloc_free_page to error
+  tid = shared_data->pid; 
   if (tid == TID_ERROR) {
-    palloc_free_page((void*)fn_copy);
-    // Free shared data struct
+    // Free shared data struct (not fn_copy cause if it made it here, then it already free'd fn_copy)
     free(shared_data);
     return tid;
   }

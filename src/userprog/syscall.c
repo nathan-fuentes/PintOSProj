@@ -109,7 +109,7 @@ static void syscall_handler(struct intr_frame* f) {
           list_remove(&(fd_map->elem));
           free(fd_map);
         }
-        // free(file_list); // TODO: If implement this, make sure to calloc file_list AND child_list
+        // free(file_list); // If implement this, make sure to calloc file_list AND child_list
         f->eax = args[1];
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
         process_exit(args[1]);
