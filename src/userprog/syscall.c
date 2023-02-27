@@ -5,7 +5,8 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "threads/vaddr.h"
-
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 
 /* Given a list of fd_maps and a fd, finds a file associated 
    with the given fd, returning NULL if none was found. */
@@ -27,17 +28,20 @@ void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "
 
 /* Checks if a given address is null, invalid, or pointing to 
    kernel memory, returning true (valid) if none apply. */
-bool validity_check(void* address) {
-  if (address == NULL) {
-    return false;
+bool validity_check(void* addr) {
+  for (int i = 0; i < 4; i++) {
+    char* address = ((char *) addr) + i;
+    if (address == NULL) {
+      return false;
+    }
+    if (is_kernel_vaddr(address)) {
+      return false;
+    }
+    uint32_t* page_directory = thread_current()->pcb->pagedir;
+    if (lookup_page(page_directory, address, false) == NULL) {
+      return false;
+    } 
   }
-  if (address > PHYS_BASE - 4) {
-    return false;
-  }
-  uint32_t* page_directory = thread_current()->pcb->pagedir;
-  if (lookup_page(page_directory, address, false) == NULL) {
-    return false;
-  } 
   return true;
 }
 
@@ -61,8 +65,8 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         f->eax = args[1];
       } else {
         f->eax = -1;
-        printf("Error: Invalid address given.");
-        process_exit();
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
       }
       break;
 
@@ -72,13 +76,26 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
     case SYS_EXIT:
       if (validity_check(&args[0]) && validity_check(&args[1])) {
+        struct list_elem *e;
+        struct list* file_list = &(thread_current()->pcb->fd_list);
+
+        for (e = list_begin(file_list); e != list_end(file_list); e = list_next(e)) {
+          fd_map_t* fd_map = list_entry(e, fd_map_t, elem);
+          lock_acquire(glob_lock);
+          file_close(fd_map->file);
+          lock_release(glob_lock);
+          list_remove(&(fd_map->elem));
+          free(fd_map);
+        }
+        // free(file_list); // TODO: If implement this, make sure to calloc file_list AND child_list
+
         f->eax = args[1];
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-        process_exit();
+        process_exit(args[1]);
       } else {
         f->eax = -1;
-        printf("Error: Invalid address given.");
-        process_exit();
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
       }
       break;
 
@@ -89,12 +106,19 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         lock_release(glob_lock);
       } else {
         f->eax = -1;
-        printf("Error: Invalid address given.");
-        process_exit();
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
       }
       break;
 
     case SYS_WAIT:
+      if (validity_check(&args[0]) && validity_check(&args[1])) {
+        f->eax = process_wait(args[1]);
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
       break;
 
     case SYS_CREATE:
@@ -122,8 +146,8 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         } // TODO: Else case for not stdout
       } else {
         f->eax = -1;
-        printf("Error: Invalid address given.");
-        process_exit();
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
       }
       break;
 

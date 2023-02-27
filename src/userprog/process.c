@@ -88,7 +88,6 @@ pid_t process_execute(const char* file_name) {
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
-  /* TODO: Add an entry to child_list. */
   shared_data_t* shared_data = (shared_data_t *) calloc(sizeof(shared_data_t), 1);
   init_shared_data(shared_data);
 
@@ -206,15 +205,31 @@ static void start_process(void* args) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(pid_t child_pid UNUSED) {
-  // sema_down(&temporary);
-  return 0;
+int process_wait(pid_t child_pid) {
+  struct thread* cur = thread_current();
+  shared_data_t* shared_data = find_shared_data(&(cur->pcb->child_list), child_pid);
+  if (shared_data == NULL) {
+    return -1;
+  }
+  sema_down(&(shared_data->sema));
+  int status = shared_data->status;
+
+  lock_acquire(&(shared_data->lock));
+  shared_data->ref_cnt -= 1;
+  lock_release(&(shared_data->lock));
+  list_remove(&(shared_data->elem));
+  if (shared_data->ref_cnt == 0) {
+    free(shared_data);
+  }
+
+  return status;
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+void process_exit(int status) {
   struct thread* cur = thread_current();
   uint32_t* pd;
+  shared_data_t* shared_data = cur->pcb->shared_data;
 
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
@@ -237,6 +252,28 @@ void process_exit(void) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
+  /* Update status in shared data struct. */
+  shared_data->status = status;
+
+  /* Remove association with shared data struct, freeing it if
+     it's the last remaining reference to shared data. */
+  lock_acquire(&(shared_data->lock));
+  shared_data->ref_cnt -= 1;
+  lock_release(&(shared_data->lock));
+
+  /* Remove association with all shared data structs in child_list. */
+  struct list_elem *e;
+
+  for (e = list_begin(&(cur->pcb->child_list)); e != list_end(&(cur->pcb->child_list)); e = list_next(e)) {
+    shared_data_t* child_shared_data = list_entry(e, shared_data_t, elem);
+    lock_acquire(&(child_shared_data->lock));
+    child_shared_data->ref_cnt -= 1;
+    lock_release(&(child_shared_data->lock));
+    if (child_shared_data->ref_cnt == 0) {
+      free(child_shared_data);
+    }
+  }
+
 
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
@@ -246,7 +283,7 @@ void process_exit(void) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  // sema_up(&temporary);
+  sema_up(&(shared_data->sema));
   thread_exit();
 }
 
