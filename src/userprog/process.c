@@ -20,15 +20,16 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp, const char* command);
 bool setup_thread(void (**eip)(void), void** esp);
+void init_shared_data(shared_data_t* shared_data);
+shared_data_t* find_shared_data(struct list* data_list, pid_t pid);
 
 typedef struct start_args {
   shared_data_t* shared_data;
-  const char* file_name;
+  char* file_name;
 } start_args_t;
 
 void init_shared_data(shared_data_t* shared_data) {
@@ -99,7 +100,7 @@ pid_t process_execute(const char* file_name) {
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, start_args);
   if (tid == TID_ERROR) {
-    palloc_free_page(fn_copy);
+    palloc_free_page((void*)fn_copy);
     // Free shared data struct
     free(shared_data);
     return tid;
@@ -108,7 +109,7 @@ pid_t process_execute(const char* file_name) {
   free(start_args); 
   // tid = shared_data->pid; // TODO: See why this causes the following palloc_free_page to error
   if (tid == TID_ERROR) {
-    palloc_free_page(fn_copy);
+    palloc_free_page((void*)fn_copy);
     // Free shared data struct
     free(shared_data);
     return tid;
@@ -122,7 +123,7 @@ pid_t process_execute(const char* file_name) {
 static void start_process(void* args) {
   start_args_t* sa = (start_args_t *) args;
   shared_data_t* shared_data = sa->shared_data;
-  const char* og_file_name = sa->file_name;
+  char* og_file_name = sa->file_name;
   
   char temp[strlen(og_file_name) + 1];
   strlcpy(temp, og_file_name, strlen(og_file_name) + 1);
@@ -177,7 +178,7 @@ static void start_process(void* args) {
   }
 
   /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(og_file_name);
+  palloc_free_page((void*)og_file_name);
   if (!success) {
     // Update shared data with relevant info
     shared_data->pid = TID_ERROR;
