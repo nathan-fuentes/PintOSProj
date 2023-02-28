@@ -103,9 +103,11 @@ pid_t process_execute(const char* file_name) {
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, start_args);
   if (tid == TID_ERROR) {
+    // struct thread* t = thread_current();
     palloc_free_page((void*)fn_copy);
     // Free shared data struct
     free(shared_data);
+    free(start_args);
     return tid;
   }
   sema_down(&(shared_data->sema));
@@ -179,6 +181,7 @@ static void start_process(void* args) {
     // If this happens, then an unfortuantely timed timer interrupt
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
+    free(t->pcb->fd_list);
     t->pcb = NULL;
     free(pcb_to_free);
   }
@@ -281,6 +284,20 @@ void process_exit(int status) {
       free(child_shared_data);
     }
   }
+
+  // struct list_elem *e;
+  struct list* file_list = cur->pcb->fd_list;
+  e = list_begin(file_list);
+  while (e != list_end(file_list)) {
+    fd_map_t* fd_map = list_entry(e, fd_map_t, elem);
+    lock_acquire(glob_lock);
+    file_close(fd_map->file);
+    lock_release(glob_lock);
+    e = list_next(e);
+    list_remove(&(fd_map->elem));
+    free(fd_map);
+  }
+  free(file_list);
 
   /* Close file */
   lock_acquire(glob_lock);

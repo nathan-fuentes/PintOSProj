@@ -97,19 +97,6 @@ static void syscall_handler(struct intr_frame* f) {
 
     case SYS_EXIT:
       if (validity_check((void *) args, 8)) {
-        struct list_elem *e;
-        struct list* file_list = thread_current()->pcb->fd_list;
-        e = list_begin(file_list);
-        while (e != list_end(file_list)) {
-          fd_map_t* fd_map = list_entry(e, fd_map_t, elem);
-          lock_acquire(glob_lock);
-          file_close(fd_map->file);
-          lock_release(glob_lock);
-          e = list_next(e);
-          list_remove(&(fd_map->elem));
-          free(fd_map);
-        }
-        free(file_list);
         f->eax = args[1];
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
         process_exit(args[1]);
