@@ -24,6 +24,11 @@ intr_entry:
 	pushl %gs
 	pushal
 
+   /* Save FPU. */
+   subl $108, %esp
+   FSAVE 0(%esp)
+   FNINIT
+
 	/* Set up kernel environment. */
 	cld			/* String instructions go upward. */
 	mov $SEL_KDSEG, %eax	/* Initialize segment registers. */
@@ -49,6 +54,10 @@ intr_entry:
 .globl intr_exit
 .func intr_exit
 intr_exit:
+   /* Restore FPU. */
+   FRSTOR 0(%esp)
+   addl $108, %esp
+
 	/* Restore caller's registers. */
 	popal
 	popl %gs

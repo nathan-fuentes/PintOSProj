@@ -206,6 +206,10 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* Load FPU. */
+  uint8_t temp[108];
+  asm("fsave (%0); fninit; fsave (%1); frstor (%2)" : : "g"(&temp), "g"(&sf->fpu), "g"(&temp));
+
   /* Add to run queue. */
   thread_unblock(t);
 

@@ -9,10 +9,8 @@
 
 /* Flags in control register 0. */
 #define CR0_PE 0x00000001      /* Protection Enable. */
-#define CR0_EM 0x00000004      /* (Floating-point) Emulation. */
 #define CR0_PG 0x80000000      /* Paging. */
 #define CR0_WP 0x00010000      /* Write-Protect enable in kernel mode. */
-
 	.section .start
 
 # The following code runs in real mode, which is a 16-bit code segment.
@@ -21,7 +19,7 @@
 .func start
 .globl start
 start:
-
+	FNINIT
 # The loader called into us with CS = 0x2000, SS = 0x0000, ESP = 0xf000,
 # but we should initialize the other segment registers.
 
@@ -147,7 +145,7 @@ start:
 #       We don't (yet) support floating point.
 
 	movl %cr0, %eax
-	orl $CR0_PE | CR0_PG | CR0_WP | CR0_EM, %eax
+	orl $CR0_PE | CR0_PG | CR0_WP, %eax
 	movl %eax, %cr0
 
 # We're now in protected mode in a 16-bit segment.  The CPU still has
