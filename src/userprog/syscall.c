@@ -11,6 +11,7 @@
 #include "filesys/filesys.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
+#include "lib/float.h"
 
 
 fd_map_t* find_fd_map(struct list* file_list, int fd);
@@ -314,5 +315,14 @@ static void syscall_handler(struct intr_frame* f) {
           process_exit(-1);
       }
       break;
+
+    case SYS_COMPUTE_E:
+      if (validity_check((void *) args, 8)) {
+        f->eax = sys_sum_to_e(args[1]);
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
   }
 }
