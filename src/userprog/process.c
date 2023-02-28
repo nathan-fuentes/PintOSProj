@@ -285,7 +285,6 @@ void process_exit(int status) {
     }
   }
 
-  // struct list_elem *e;
   struct list* file_list = cur->pcb->fd_list;
   e = list_begin(file_list);
   while (e != list_end(file_list)) {

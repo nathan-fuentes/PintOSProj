@@ -36,7 +36,6 @@ void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "
 
 /* Checks if a given address is null, invalid, or pointing to 
    kernel memory, returning true (valid) if none apply. */
-// TODO: Implement proper string checking (longer than 4 bytes)
 bool validity_check(void* addr, int num_bytes) {
   for (int i = 0; i < num_bytes; i++) {
     char* address = ((char *) addr) + i;
@@ -210,12 +209,11 @@ static void syscall_handler(struct intr_frame* f) {
             }
           }
         } else {
-          // TODO: STDIN CASE
           lock_acquire(glob_lock);
           char* result;
           uint8_t curr_key;
           int size = 1;
-          while ((curr_key = input_getc()) != -1) { // Change to EOF if possible
+          while ((curr_key = input_getc()) != -1) {
             char curr_char = (char) curr_key;
             strlcpy(result, curr_char, 1);
             size++;
@@ -236,10 +234,6 @@ static void syscall_handler(struct intr_frame* f) {
       if (validity_check((void *) args, 16) && validity_check((void *) args[2], 4)) {
         if (args[1] == 1) {
           lock_acquire(glob_lock);
-          // TODO: Fix Below to account for large buffer sizes
-          /*for (int i = 0; i < args[3]; i += 256) {
-            putbuf(args[2] + i, 256);
-          }*/
           putbuf(args[2], args[3]);
           f->eax = args[3];
           lock_release(glob_lock);
