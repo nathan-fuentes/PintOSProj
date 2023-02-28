@@ -7,6 +7,7 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
@@ -41,7 +42,7 @@ void init_shared_data(shared_data_t* shared_data) {
 }
 
 shared_data_t* find_shared_data(struct list* data_list, pid_t pid) {
-  struct list_elem *e;
+  struct list_elem* e;
 
   for (e = list_begin(data_list); e != list_end(data_list); e = list_next(e)) {
     shared_data_t* shared_data = list_entry(e, shared_data_t, elem);
@@ -66,9 +67,11 @@ void userprog_init(void) {
      page directory) when t->pcb is assigned, because a timer interrupt
      can come at any time and activate our pagedir */
   t->pcb = calloc(sizeof(struct process), 1);
+  t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1);
   list_init(&(t->pcb->child_list));
-  list_init(&(t->pcb->fd_list));
+  list_init(t->pcb->fd_list);
   success = t->pcb != NULL;
+  t->pcb->is_parent = true;
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
@@ -89,11 +92,11 @@ pid_t process_execute(const char* file_name) {
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
-  shared_data_t* shared_data = (shared_data_t *) calloc(sizeof(shared_data_t), 1);
+  shared_data_t* shared_data = (shared_data_t*)calloc(sizeof(shared_data_t), 1);
   init_shared_data(shared_data);
 
   /* Create an arguments struct for start_process. */
-  start_args_t* start_args = (start_args_t *)calloc(sizeof(start_args_t), 1);
+  start_args_t* start_args = (start_args_t*)calloc(sizeof(start_args_t), 1);
   start_args->file_name = fn_copy;
   start_args->shared_data = shared_data;
 
@@ -106,8 +109,8 @@ pid_t process_execute(const char* file_name) {
     return tid;
   }
   sema_down(&(shared_data->sema));
-  free(start_args); 
-  tid = shared_data->pid; 
+  free(start_args);
+  tid = shared_data->pid;
   if (tid == TID_ERROR) {
     // Free shared data struct (not fn_copy cause if it made it here, then it already free'd fn_copy)
     free(shared_data);
@@ -120,10 +123,10 @@ pid_t process_execute(const char* file_name) {
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* args) {
-  start_args_t* sa = (start_args_t *) args;
+  start_args_t* sa = (start_args_t*)args;
   shared_data_t* shared_data = sa->shared_data;
   char* og_file_name = sa->file_name;
-  
+
   char temp[strlen(og_file_name) + 1];
   strlcpy(temp, og_file_name, strlen(og_file_name) + 1);
   char* rest = temp;
@@ -150,11 +153,15 @@ static void start_process(void* args) {
     list_init(&(t->pcb->child_list));
     t->pcb->shared_data->pid = t->tid;
     t->pcb->fd_tracker = 3;
-    list_init(&(t->pcb->fd_list));
+    t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1); 
+    list_init(t->pcb->fd_list);                       
+    t->pcb->is_parent = false;
 
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
-    strlcpy(t->pcb->process_name, file_name, strlen(file_name) + 1); // May need to replace file_name with t->name, that's what it OG was
+    strlcpy(t->pcb->process_name, file_name,
+            strlen(file_name) +
+                1); // May need to replace file_name with t->name, that's what it OG was
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -262,9 +269,10 @@ void process_exit(int status) {
   lock_release(&(shared_data->lock));
 
   /* Remove association with all shared data structs in child_list. */
-  struct list_elem *e;
+  struct list_elem* e;
 
-  for (e = list_begin(&(cur->pcb->child_list)); e != list_end(&(cur->pcb->child_list)); e = list_next(e)) {
+  for (e = list_begin(&(cur->pcb->child_list)); e != list_end(&(cur->pcb->child_list));
+       e = list_next(e)) {
     shared_data_t* child_shared_data = list_entry(e, shared_data_t, elem);
     lock_acquire(&(child_shared_data->lock));
     child_shared_data->ref_cnt -= 1;
@@ -274,6 +282,12 @@ void process_exit(int status) {
     }
   }
 
+  /* Close file */
+  lock_acquire(glob_lock);
+  file_close(cur->pcb->file);
+  lock_release(glob_lock);
+
+  bool is_parent = cur->pcb->is_parent;
 
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
@@ -283,7 +297,9 @@ void process_exit(int status) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  if (shared_data->ref_cnt == 0) {
+  if (is_parent) {
+    free(glob_lock);
+  } else if (shared_data->ref_cnt == 0) {
     free(shared_data);
   } else {
     sema_up(&(shared_data->sema));
@@ -465,9 +481,16 @@ bool load(const char* file_name, void (**eip)(void), void** esp, const char* com
 
   success = true;
 
+  if (success) {
+    lock_acquire(glob_lock);
+    file_deny_write(file);
+    lock_release(glob_lock);
+  }
+
+  t->pcb->file = file;
+
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
   return success;
 }
 
@@ -594,10 +617,10 @@ static bool setup_stack(void** esp, const char* command) {
   char temp[strlen(command) + 1];
   strlcpy(temp, command, strlen(command) + 1);
   char* rest = temp;
-  
+
   while ((token = strtok_r(rest, " ", &rest))) {
     *esp -= 1;
-    *(char *)*esp = '\0';
+    *(char*)*esp = '\0';
     *esp -= strlen(token);
     memcpy(*esp, token, strlen(token));
     argv[argc] = *esp;
@@ -610,12 +633,12 @@ static bool setup_stack(void** esp, const char* command) {
   if (num_null != 0) {
     for (int i = 0; i < num_null; i++) {
       *esp -= 1;
-      *(char *)*esp = '\0';
+      *(char*)*esp = '\0';
     }
   }
 
   *esp -= 4;
-  *(char *)*esp = NULL;
+  *(char*)*esp = NULL;
   for (int i = argc - 1; i >= 0; i--) {
     *esp -= 4;
     memcpy(*esp, &(argv[i]), sizeof(char*));
@@ -624,9 +647,9 @@ static bool setup_stack(void** esp, const char* command) {
   *esp -= 4;
   memcpy(*esp, &argv_start, sizeof(char*));
   *esp -= 4;
-  *(int *)*esp = argc;
+  *(int*)*esp = argc;
   *esp -= 4;
-  *(int *)*esp = 0;
+  *(int*)*esp = 0;
 
   return success;
 }

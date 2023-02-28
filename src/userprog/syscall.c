@@ -98,7 +98,7 @@ static void syscall_handler(struct intr_frame* f) {
     case SYS_EXIT:
       if (validity_check((void *) args, 8)) {
         struct list_elem *e;
-        struct list* file_list = &(thread_current()->pcb->fd_list);
+        struct list* file_list = thread_current()->pcb->fd_list;
         e = list_begin(file_list);
         while (e != list_end(file_list)) {
           fd_map_t* fd_map = list_entry(e, fd_map_t, elem);
@@ -109,7 +109,7 @@ static void syscall_handler(struct intr_frame* f) {
           list_remove(&(fd_map->elem));
           free(fd_map);
         }
-        // free(file_list); // If implement this, make sure to calloc file_list AND child_list
+        free(file_list);
         f->eax = args[1];
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
         process_exit(args[1]);
@@ -122,9 +122,7 @@ static void syscall_handler(struct intr_frame* f) {
 
     case SYS_EXEC:
       if (validity_check((void *) args, 8) && validity_check((void *) args[1], 4)) {
-        lock_acquire(glob_lock);
         f->eax = process_execute(args[1]);
-        lock_release(glob_lock);
       } else {
         f->eax = -1;
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
@@ -171,15 +169,15 @@ static void syscall_handler(struct intr_frame* f) {
         int fd = -1;
         lock_acquire(glob_lock);
         struct file* file = filesys_open(args[1]);
+        lock_release(glob_lock);
         if (file != NULL) {
           fd_map_t* fd_map = (fd_map_t *) calloc(sizeof(fd_map_t), 1);
           fd = thread_current()->pcb->fd_tracker;
           fd_map->fd = fd;
           thread_current()->pcb->fd_tracker++;
           fd_map->file = file;
-          list_push_back(&(thread_current()->pcb->fd_list), &(fd_map->elem));
+          list_push_back(thread_current()->pcb->fd_list, &(fd_map->elem));
         }
-        lock_release(glob_lock);
         f->eax = fd;
       } else {
         f->eax = -1;
@@ -191,7 +189,7 @@ static void syscall_handler(struct intr_frame* f) {
     case SYS_FILESIZE:
       if (validity_check((void *) args, 8)) {
         int size;
-        fd_map_t* fd_map = find_fd_map(&(thread_current()->pcb->fd_list), args[1]);
+        fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
         if (fd_map == NULL) {
           f->eax = -1;
         } else {
@@ -214,7 +212,7 @@ static void syscall_handler(struct intr_frame* f) {
           if (args[1] == 1) {
             f->eax = -1;
           } else {
-            fd_map_t* fd_map = find_fd_map(&(thread_current()->pcb->fd_list), args[1]);
+            fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
             if (fd_map == NULL) {
               f->eax = -1;
             } else {
@@ -262,7 +260,7 @@ static void syscall_handler(struct intr_frame* f) {
           if (args[1] == 0) {
             f->eax = -1;
           } else {
-            fd_map_t* fd_map = find_fd_map(&(thread_current()->pcb->fd_list), args[1]);
+            fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
             if (fd_map == NULL) {
               f->eax = -1;
             } else {
@@ -282,7 +280,7 @@ static void syscall_handler(struct intr_frame* f) {
 
     case SYS_SEEK:
       if (validity_check((void *) args, 12)) {
-          fd_map_t* fd_map = find_fd_map(&(thread_current()->pcb->fd_list), args[1]);
+          fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
           if (fd_map == NULL) {
             f->eax = -1;
           } else {
@@ -300,7 +298,7 @@ static void syscall_handler(struct intr_frame* f) {
 
     case SYS_TELL:
       if (validity_check((void *) args, 8)) {
-        fd_map_t* fd_map = find_fd_map(&(thread_current()->pcb->fd_list), args[1]);
+        fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
         if (fd_map == NULL) {
           f->eax = -1;
         } else {
@@ -318,7 +316,7 @@ static void syscall_handler(struct intr_frame* f) {
 
     case SYS_CLOSE:
       if (validity_check((void *) args, 8)) {
-            fd_map_t* fd_map = find_fd_map(&(thread_current()->pcb->fd_list), args[1]);
+            fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
             if (fd_map == NULL) {
               f->eax = -1;
             } else {
