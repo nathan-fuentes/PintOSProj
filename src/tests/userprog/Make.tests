@@ -19,7 +19,7 @@ wait-simple wait-twice wait-killed wait-bad-pid multi-recurse           \
 multi-child-fd rox-simple rox-child rox-multichild bad-read bad-write   \
 bad-read2 bad-write2 bad-jump bad-jump2 iloveos practice stack-align-1  \
 stack-align-2 stack-align-3 stack-align-4 floating-point fp-simul       \
-fp-asm fp-syscall fp-kernel-e fp-init)
+fp-asm fp-syscall fp-kernel-e fp-init bad-tell close-null)
 
 tests/userprog_PROGS = $(tests/userprog_TESTS) $(addprefix \
 tests/userprog/,child-simple child-args child-bad child-close \
@@ -69,6 +69,8 @@ tests/userprog/open-boundary_SRC = tests/userprog/open-boundary.c	\
 tests/userprog/boundary.c tests/main.c
 tests/userprog/open-empty_SRC = tests/userprog/open-empty.c tests/main.c
 tests/userprog/open-null_SRC = tests/userprog/open-null.c tests/main.c
+tests/userprog/close-null_SRC = tests/userprog/close-null.c tests/main.c
+tests/userprog/bad-tell_SRC = tests/userprog/bad-tell.c tests/main.c
 tests/userprog/open-bad-ptr_SRC = tests/userprog/open-bad-ptr.c tests/main.c
 tests/userprog/open-twice_SRC = tests/userprog/open-twice.c tests/main.c
 tests/userprog/close-normal_SRC = tests/userprog/close-normal.c tests/main.c
