@@ -90,7 +90,9 @@ struct thread {
   int priority;              /* Priority. */
   struct list_elem allelem;  /* List element for all threads list. */
   int64_t wakeup_time;       /* Time a thread should be woken up, used for sleep calcs */
-  int effective_priority;    /* effective priority of the thread */
+  int effective_priority;    /* Effective priority of the thread */
+  struct list holding_list;  /* A list of locks the thread holds */
+  struct thread* waiting;    /* Waiting on this thread (may be NULL) */
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
@@ -145,6 +147,7 @@ void thread_foreach(thread_action_func*, void*);
 
 int thread_get_priority(void);
 void thread_set_priority(int);
+bool prio_cmp(const struct list_elem* a, const struct list_elem* b, void* aux);
 
 int thread_get_nice(void);
 void thread_set_nice(int);

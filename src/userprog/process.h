@@ -48,6 +48,7 @@ struct process {
   struct list* fd_list;       /* Ptr to file descriptor list struct */
   int fd_tracker;             /* Global file descriptor "counter" */
   struct file* file;          /* File ptr */
+  struct list thread_list;    /* List of kernel threads */
   bool is_parent;
 };
 

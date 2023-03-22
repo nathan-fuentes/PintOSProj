@@ -22,7 +22,7 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list fifo_ready_list;
+static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -107,7 +107,7 @@ void thread_init(void) {
   ASSERT(intr_get_level() == INTR_OFF);
 
   lock_init(&tid_lock);
-  list_init(&fifo_ready_list);
+  list_init(&ready_list);
   list_init(&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -239,7 +239,7 @@ static void thread_enqueue(struct thread* t) {
   ASSERT(is_thread(t));
 
   if (active_sched_policy == SCHED_FIFO)
-    list_push_back(&fifo_ready_list, &t->elem);
+    list_push_back(&ready_list, &t->elem);
   else
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
 }
@@ -336,6 +336,39 @@ void thread_set_priority(int new_priority) { thread_current()->priority = new_pr
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void) { return thread_current()->priority; }
+
+/* Comparator for thread's priority. */
+bool prio_cmp(const struct list_elem* a, const struct list_elem* b, void* aux UNUSED) {
+  int p1 = list_entry(a, struct thread, elem)->effective_priority;
+  int p2 = list_entry(b, struct thread, elem)->effective_priority;
+ // return ((bool (*)(struct thread*, struct thread*))aux)(p1, p2);
+ return p1 > p2;
+}
+
+//Updates thread place in ready_list
+void replace(struct thread* t, struct list* t_list) {
+  list_remove(&(t->elem));
+  list_insert_ordered(t_list, &(t->elem), prio_cmp, NULL);
+}
+
+//Get's waiting thread that has the higheset priority
+struct thread* get_highest_priority(struct list* t_list) {
+  struct thread* max_t = NULL;
+  int max_priority = -1;
+  struct list_elem *e;
+  for (e = list_begin(t_list); e != list_end(t_list); e = list_next(e)) {
+    struct thread* t = list_entry(e, struct thread, elem);
+    if (t->effective_priority > max_priority) {
+      max_priority = t->effective_priority;
+      max_t = t;
+    }
+  }
+  return max_t;
+}
+
+//How to update thread in ready list
+//list_remove(&thread_current()->elem);
+//list_insert_ordered(&ready_list, &thread_current()->elem, prio_cmp, NULL);
 
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */
@@ -454,8 +487,8 @@ static void* alloc_frame(struct thread* t, size_t size) {
 
 /* First-in first-out scheduler */
 static struct thread* thread_schedule_fifo(void) {
-  if (!list_empty(&fifo_ready_list))
-    return list_entry(list_pop_front(&fifo_ready_list), struct thread, elem);
+  if (!list_empty(&ready_list))
+    return list_entry(list_pop_front(&ready_list), struct thread, elem);
   else
     return idle_thread;
 }
@@ -463,8 +496,8 @@ static struct thread* thread_schedule_fifo(void) {
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
   // TODO: Formalize
-  if (!list_empty(&fifo_ready_list))
-    return list_entry(list_pop_front(&fifo_ready_list), struct thread, elem);
+  if (!list_empty(&ready_list))
+    return list_entry(list_pop_front(&ready_list), struct thread, elem);
   else
     return idle_thread;
   // PANIC("Unimplemented scheduler policy: \"-sched=prio\"");
