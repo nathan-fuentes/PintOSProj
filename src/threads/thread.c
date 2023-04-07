@@ -345,7 +345,19 @@ void thread_set_priority(int new_priority) {
     thread_current()->effective_priority = new_priority;
   }
   thread_current()->priority = new_priority; 
-  intr_set_level(old_level);
+  if (!list_empty(&ready_list)) {
+    int max_prio = list_entry(list_front(&(ready_list)), struct thread, elem)->effective_priority;
+    intr_set_level(old_level);
+    if (max_prio > thread_current()->effective_priority) {
+      if (!intr_context()) {
+        thread_yield();
+      } else {
+        intr_yield_on_return();
+      }
+    }
+  } else {
+    intr_set_level(old_level);
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -379,10 +391,6 @@ struct thread* get_highest_priority(struct list* t_list) {
   }
   return max_t;
 }
-
-//How to update thread in ready list
-//list_remove(&thread_current()->elem);
-//list_insert_ordered(&ready_list, &thread_current()->elem, prio_cmp, NULL);
 
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */
