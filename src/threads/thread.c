@@ -213,6 +213,10 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   /* Add to run queue. */
   thread_unblock(t);
 
+  if (t->effective_priority > thread_current()->effective_priority) {
+    thread_yield();
+  }
+
   return tid;
 }
 
@@ -240,6 +244,8 @@ static void thread_enqueue(struct thread* t) {
 
   if (active_sched_policy == SCHED_FIFO)
     list_push_back(&ready_list, &t->elem);
+  else if (active_sched_policy == SCHED_PRIO)
+    list_insert_ordered(&ready_list, &(t->elem), prio_cmp, NULL);
   else
     PANIC("Unimplemented scheduling policy value: %d", active_sched_policy);
 }
@@ -332,7 +338,15 @@ void thread_foreach(thread_action_func* func, void* aux) {
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void thread_set_priority(int new_priority) { thread_current()->priority = new_priority; }
+void thread_set_priority(int new_priority) { 
+  // TODO: May need to dis/en interrupts
+  enum intr_level old_level = intr_disable();
+  if (new_priority >= thread_current()->effective_priority || thread_current()->effective_priority == thread_current()->priority) {
+    thread_current()->effective_priority = new_priority;
+  }
+  thread_current()->priority = new_priority; 
+  intr_set_level(old_level);
+}
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void) { return thread_current()->priority; }
