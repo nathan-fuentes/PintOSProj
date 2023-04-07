@@ -115,9 +115,9 @@ void sema_up(struct semaphore* sema) {
     }
     thread_unblock(highest_prio_th);
     list_remove(&(highest_prio_th->sema_elem));
+    sema->value++;
+    intr_set_level(old_level);
     if (max_prio > thread_current()->effective_priority) {
-      sema->value++;
-      intr_set_level(old_level);
       if (!intr_context()) {
         thread_yield();
       } else {
