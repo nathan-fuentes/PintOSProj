@@ -15,6 +15,8 @@
 
 
 fd_map_t* find_fd_map(struct list* file_list, int fd);
+struct lock* find_lock(struct list* lock_t_list, lock_t* l);
+struct semaphore* find_sema(struct list* sema_t_list, sema_t* s);
 bool validity_check(void* addr, int num_bytes);
 
 /* Given a list of fd_maps and a fd, finds a fd_map associated 
@@ -30,6 +32,36 @@ fd_map_t* find_fd_map(struct list* file_list, int fd) {
   }
   return NULL;
 }
+
+/* Given a list of lock_t_maps and a lock_t, finds a lock_t_maps associated 
+   with the given lock_t, returning NULL if none was found. */
+struct lock* find_lock(struct list* lock_t_list, lock_t* l) {
+  struct list_elem *e;
+
+  for (e = list_begin(lock_t_list); e != list_end(lock_t_list); e = list_next(e)) {
+    lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
+    if (l == lock_t_map->l) {
+      return &(lock_t_map->lock);
+    }
+  }
+  return NULL;
+}
+
+/* Given a list of sema_t_maps and a sema_t, finds a sema_t_maps associated 
+   with the given sema_t, returning NULL if none was found. */
+struct semaphore* find_sema(struct list* sema_t_list, sema_t* s) {
+  struct list_elem *e;
+
+  for (e = list_begin(sema_t_list); e != list_end(sema_t_list); e = list_next(e)) {
+    sema_t_map_t* sema_t_map = list_entry(e, sema_t_map_t, elem);
+    if (s == sema_t_map->s) {
+      return &(sema_t_map->sema);
+    }
+  }
+  return NULL;
+}
+
+
 
 static void syscall_handler(struct intr_frame*);
 
@@ -324,5 +356,126 @@ static void syscall_handler(struct intr_frame* f) {
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
+      break;
+    
+    case SYS_PT_CREATE:
+      break;
+  
+    case SYS_PT_EXIT:
+      break;
+  
+    case SYS_PT_JOIN:
+      break;
+    
+    case SYS_LOCK_INIT:
+      if (validity_check((void *) args, 8)) {
+        // TODO: error check the calloc if needed
+        if (args[1] == NULL) {
+          f->eax = false;
+          break;
+        }
+        lock_t_map_t *lock_t_map = calloc(1, sizeof(lock_t_map_t));
+        lock_init(&(lock_t_map->lock));
+        lock_t_map->l = (lock_t *) args[1];
+        list_push_back(&(thread_current()->pcb->lock_t_list), &(lock_t_map->elem));
+        f->eax = true;
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+    
+    case SYS_LOCK_ACQUIRE:
+      if (validity_check((void *) args, 8)) {
+        struct lock *l = find_lock(&(thread_current()->pcb->lock_t_list), (lock_t *) args[1]);
+        if (l == NULL || l->holder == thread_current()) {
+          f->eax = false;
+          break;
+        }
+        lock_acquire(l);
+        f->eax = true;
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+    
+    case SYS_LOCK_RELEASE:
+      if (validity_check((void *) args, 8)) {
+        struct lock *l = find_lock(&(thread_current()->pcb->lock_t_list), (lock_t *) args[1]);
+        if (l == NULL || l->holder != thread_current()) {
+          f->eax = false;
+          break;
+        }
+        lock_release(l);
+        f->eax = true;
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+
+    case SYS_SEMA_INIT:
+      if (validity_check((void *) args, 12)) {
+        if (args[1] == NULL || (int) args[2] < 0) {
+          f->eax = false;
+          break;
+        }
+        sema_t_map_t *sema_t_map = calloc(1, sizeof(sema_t_map_t));
+        sema_init(&(sema_t_map->sema), (int) args[2]);
+        sema_t_map->s = (sema_t *) args[1];
+        list_push_back(&(thread_current()->pcb->sema_t_list), &(sema_t_map->elem));
+        f->eax = true;
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+    
+    case SYS_SEMA_DOWN:
+      if (validity_check((void *) args, 8)) {
+        struct sema *s = find_sema(&(thread_current()->pcb->sema_t_list), (sema_t *) args[1]);
+        if (s == NULL) {
+          f->eax = false;
+          break;
+        }
+        sema_down(s);
+        f->eax = true;
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+    
+    case SYS_SEMA_UP:
+      if (validity_check((void *) args, 8)) {
+        struct sema *s = find_sema(&(thread_current()->pcb->sema_t_list), (sema_t *) args[1]);
+        if (s == NULL) {
+          f->eax = false;
+          break;
+        }
+        sema_up(s);
+        f->eax = true;
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+    
+    case SYS_GET_TID:
+      if (validity_check((void *) args, 4)) {
+        f->eax = thread_current()->tid;
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
   }
-}
+} 

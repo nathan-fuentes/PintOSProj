@@ -69,6 +69,8 @@ void userprog_init(void) {
   t->pcb = calloc(sizeof(struct process), 1);
   t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1);
   list_init(&(t->pcb->child_list));
+  list_init(&(t->pcb->lock_t_list));
+  list_init(&(t->pcb->sema_t_list));
   list_init(t->pcb->fd_list);
   success = t->pcb != NULL;
   t->pcb->is_parent = true;
@@ -153,6 +155,8 @@ static void start_process(void* args) {
     t->pcb = new_pcb;
     t->pcb->shared_data = shared_data;
     list_init(&(t->pcb->child_list));
+    list_init(&(t->pcb->lock_t_list));
+    list_init(&(t->pcb->sema_t_list));
     t->pcb->shared_data->pid = t->tid;
     t->pcb->fd_tracker = 3;
     t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1); 
@@ -286,6 +290,31 @@ void process_exit(int status) {
     if (child_shared_data->ref_cnt == 0) {
       free(child_shared_data);
     }
+  }
+
+  struct list* lock_t_list = &(cur->pcb->lock_t_list);
+  int rando = list_size(lock_t_list);
+  e = list_begin(lock_t_list);
+  while (e != list_end(lock_t_list)) {
+    lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
+    e = list_next(e);
+    list_remove(&(lock_t_map->elem));
+    // free(lock_t_map->lock);
+    if (e != list_end(lock_t_list))
+    free(lock_t_map);
+    //free(lock_t_map->lock);
+  }
+
+  struct list* sema_t_list = &(cur->pcb->sema_t_list);
+  e = list_begin(sema_t_list);
+  while (e != list_end(sema_t_list)) {
+    sema_t_map_t* sema_t_map = list_entry(e, sema_t_map_t, elem);
+    e = list_next(e);
+    list_remove(&(sema_t_map->elem));
+    // free(sema_t_map->sema);
+    if (e != list_end(sema_t_list))
+    free(sema_t_map);
+    //free(sema_t_map->sema);
   }
 
   struct list* file_list = cur->pcb->fd_list;
