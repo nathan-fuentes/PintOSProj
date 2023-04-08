@@ -84,22 +84,19 @@ void timer_sleep(int64_t ticks) {
   enum intr_level old_level = intr_set_level(INTR_OFF);
   bool did_not_make_it = true;
 
-  // TODO: DELETE THIS
-  // struct list_elem *e;
-  // for (e = list_begin(&sleeping_t_list); e != list_end(&sleeping_t_list); e = list_next(e)) {
-  //   struct thread* t = list_entry(e, struct thread, elem);
-  //   if (t->wakeup_time >= thread_current()->wakeup_time) {
-  //     list_insert(e, &(thread_current()->elem));
-  //     did_not_make_it = false;
-  //     break;
-  //   }
-  // }
-  list_insert_ordered(&sleeping_t_list, &thread_current()->elem, prio_cmp, NULL);
+  struct list_elem *e;
+  for (e = list_begin(&sleeping_t_list); e != list_end(&sleeping_t_list); e = list_next(e)) {
+    struct thread* t = list_entry(e, struct thread, elem);
+    if (t->wakeup_time >= thread_current()->wakeup_time) {
+      list_insert(e, &(thread_current()->elem));
+      did_not_make_it = false;
+      break;
+    }
+  }
 
-
-  // if (did_not_make_it) {
-  //   list_push_back(&sleeping_t_list, &(thread_current()->elem));
-  // }
+  if (did_not_make_it) {
+    list_push_back(&sleeping_t_list, &(thread_current()->elem));
+  }
   thread_block();
   intr_set_level(old_level);
   // TODO: Delete this commented block out later
