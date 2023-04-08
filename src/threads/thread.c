@@ -20,10 +20,6 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
-/* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
-static struct list ready_list;
-
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -339,7 +335,6 @@ void thread_foreach(thread_action_func* func, void* aux) {
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) { 
-  // TODO: May need to dis/en interrupts
   enum intr_level old_level = intr_disable();
   if (new_priority >= thread_current()->effective_priority || thread_current()->effective_priority == thread_current()->priority) {
     thread_current()->effective_priority = new_priority;
@@ -378,12 +373,13 @@ void replace(struct thread* t, struct list* t_list) {
 }
 
 //Get's waiting thread that has the higheset priority
+// Note: ONLY USE THIS FOR SEMAPHORE WAITERS LIST
 struct thread* get_highest_priority(struct list* t_list) {
   struct thread* max_t = NULL;
   int max_priority = -1;
   struct list_elem *e;
   for (e = list_begin(t_list); e != list_end(t_list); e = list_next(e)) {
-    struct thread* t = list_entry(e, struct thread, elem);
+    struct thread* t = list_entry(e, struct thread, sema_elem);
     if (t->effective_priority > max_priority) {
       max_priority = t->effective_priority;
       max_t = t;
@@ -490,6 +486,8 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->effective_priority = priority;
   t->pcb = NULL;
   t->magic = THREAD_MAGIC;
+
+  list_init(&(t->holding_list));
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);

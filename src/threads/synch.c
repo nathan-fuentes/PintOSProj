@@ -195,12 +195,22 @@ void lock_acquire(struct lock* lock) {
   ASSERT(lock != NULL);
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
-  // if (lock_try_acquire(&lock)) {
-  //   // TODO: Handle this case
-  //   struct thread* temp_tcb;
-  // }
-  sema_down(&lock->semaphore);
+  if (lock->holder != NULL) {
+    struct thread* temp_tcb = thread_current();
+    temp_tcb->waiting = lock->holder;
+    if (temp_tcb->effective_priority > temp_tcb->waiting->effective_priority) {
+      do {
+        temp_tcb->waiting->effective_priority = temp_tcb->effective_priority;
+        temp_tcb = temp_tcb->waiting;
+      } while (temp_tcb->waiting != NULL && temp_tcb->status == THREAD_BLOCKED);
+      if (temp_tcb->status != THREAD_BLOCKED) {
+        replace(temp_tcb, &ready_list);
+      }
+    }
+  }
+  sema_down(&(lock->semaphore));
   lock->holder = thread_current();
+  list_push_back(&(thread_current()->holding_list), &(lock->elem));
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -231,6 +241,19 @@ void lock_release(struct lock* lock) {
   ASSERT(lock_held_by_current_thread(lock));
 
   lock->holder = NULL;
+  list_remove(&(lock->elem));
+
+  thread_current()->effective_priority = thread_current()->priority;
+
+  struct list_elem *e;
+  for (e = list_begin(&(thread_current()->holding_list)); e != list_end(&(thread_current()->holding_list)); e = list_next(e)) {
+    struct lock* l = list_entry(e, struct lock, elem);
+    struct thread* t = get_highest_priority(&(l->semaphore.waiters));
+    if (t != NULL && t->effective_priority > thread_current()->effective_priority) {
+      thread_current()->effective_priority = t->effective_priority;
+    }
+  }
+
   sema_up(&lock->semaphore);
 }
 

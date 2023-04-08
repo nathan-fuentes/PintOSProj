@@ -25,6 +25,11 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
 
+/* List of processes in THREAD_READY state, that is, processes
+   that are ready to run but not actually running. */
+struct list ready_list;
+struct thread* get_highest_priority(struct list* t_list);
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -95,8 +100,8 @@ struct thread {
   struct thread* waiting;    /* Waiting on this thread (may be NULL) */
 
   /* Shared between thread.c and synch.c. */
-  struct list_elem elem; /* List element. */
-  struct list_elem sema_elem;
+  struct list_elem elem;      /* List element. */
+  struct list_elem sema_elem; /* List element for the waiting queue of a semaphore */
 
 #ifdef USERPROG
   /* Owned by process.c. */
