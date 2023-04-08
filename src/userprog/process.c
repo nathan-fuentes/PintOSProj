@@ -299,22 +299,18 @@ void process_exit(int status) {
     lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
     e = list_next(e);
     list_remove(&(lock_t_map->elem));
-    // free(lock_t_map->lock);
-    if (e != list_end(lock_t_list))
+    if (lock_t_map->lock.holder != NULL) lock_release(&lock_t_map->lock);
     free(lock_t_map);
-    //free(lock_t_map->lock);
   }
 
   struct list* sema_t_list = &(cur->pcb->sema_t_list);
   e = list_begin(sema_t_list);
   while (e != list_end(sema_t_list)) {
+    // TODO: May need to up sema similar to how we released locks bozo L dookie fudge this LLLLL
     sema_t_map_t* sema_t_map = list_entry(e, sema_t_map_t, elem);
     e = list_next(e);
     list_remove(&(sema_t_map->elem));
-    // free(sema_t_map->sema);
-    if (e != list_end(sema_t_list))
     free(sema_t_map);
-    //free(sema_t_map->sema);
   }
 
   struct list* file_list = cur->pcb->fd_list;
