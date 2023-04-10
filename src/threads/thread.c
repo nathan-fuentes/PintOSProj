@@ -515,12 +515,10 @@ static struct thread* thread_schedule_fifo(void) {
 
 /* Strict priority scheduler */
 static struct thread* thread_schedule_prio(void) {
-  // TODO: Formalize
   if (!list_empty(&ready_list))
     return list_entry(list_pop_front(&ready_list), struct thread, elem);
   else
     return idle_thread;
-  // PANIC("Unimplemented scheduler policy: \"-sched=prio\"");
 }
 
 /* Fair priority scheduler */

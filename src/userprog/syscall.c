@@ -151,9 +151,9 @@ static void syscall_handler(struct intr_frame* f) {
 
     case SYS_WAIT:
       if (validity_check((void *) args, 8)) {
-        lock_acquire(&(thread_current()->pcb->lock)); // TODO: May need to delete or add back
+        lock_acquire(&(thread_current()->pcb->lock));
         f->eax = process_wait(args[1]);
-        lock_release(&(thread_current()->pcb->lock)); // TODO: May need to delete or add back
+        lock_release(&(thread_current()->pcb->lock));
       } else {
         f->eax = -1;
         process_exit(-1);
@@ -388,7 +388,6 @@ static void syscall_handler(struct intr_frame* f) {
     
     case SYS_LOCK_INIT:
       if (validity_check((void *) args, 8)) {
-        // TODO: error check the calloc if needed
         if (args[1] == NULL) {
           f->eax = false;
           break;

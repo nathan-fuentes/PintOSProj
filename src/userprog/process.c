@@ -269,15 +269,13 @@ static void start_process(void* args) {
    does nothing. */
 int process_wait(pid_t child_pid) {
   struct thread* cur = thread_current();
-  // lock_acquire(&(cur->pcb->lock));
   shared_data_t* shared_data = find_shared_data(&(cur->pcb->child_list), child_pid);
-  // lock_release(&(cur->pcb->lock));
   if (shared_data == NULL) {  
     return -1;
   }
-  lock_release(&(cur->pcb->lock)); // TODO: May need to delete or add back
+  lock_release(&(cur->pcb->lock));
   sema_down(&(shared_data->sema));
-  lock_acquire(&(cur->pcb->lock)); // TODO: May need to delete or add back
+  lock_acquire(&(cur->pcb->lock));
   int status = shared_data->status;
 
   lock_acquire(&(shared_data->lock));
@@ -290,7 +288,7 @@ int process_wait(pid_t child_pid) {
 
   return status;
 }
-//I love foot fungus
+//I love foot fungus (burger king foot lettuce)
 /* Free the current process's resources. */
 void process_exit(int status) {
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
@@ -354,7 +352,6 @@ void process_exit(int status) {
   struct list* sema_t_list = &(cur->pcb->sema_t_list);
   e = list_begin(sema_t_list);
   while (e != list_end(sema_t_list)) {
-    // TODO: May need to up sema similar to how we released locks bozo L dookie fudge this LLLLL
     sema_t_map_t* sema_t_map = list_entry(e, sema_t_map_t, elem);
     e = list_next(e);
     list_remove(&(sema_t_map->elem));
@@ -858,7 +855,6 @@ tid_t pthread_execute(stub_fun sf, pthread_fun tf, void* arg) {
   thread_start_args->pcb = t->pcb;
   
   tid_t tid = thread_create("joemama", PRI_DEFAULT, start_pthread, thread_start_args);
-  // TODO: May have to release and re-acquire lock here
   // lock_release(&(thread_current()->pcb->lock)); // TODO: May need to delete or add
   sema_down(&(thread_shared_data->sema));
   // lock_acquire(&(thread_current()->pcb->lock)); // TODO: May need to delete or add
@@ -889,7 +885,6 @@ static void start_pthread(void* exec_) {
   t->thread_shared_data = thread_shared_data;
   struct intr_frame if_;
   t->pcb = pcb;
-  // t->pcb->pagedir = 0xc010e000; // Uncomment for Debugging (TODO: Delete Later)
   memset(&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
@@ -918,9 +913,7 @@ static void start_pthread(void* exec_) {
    now, it does nothing. */
 tid_t pthread_join(tid_t tid) { 
   struct thread* t = thread_current();
-  // lock_acquire(&(t->pcb->lock));
   thread_shared_data_t* thread_shared_data = find_thread_shared_data(&(t->pcb->thread_list), tid);
-  // lock_release(&(t->pcb->lock));
   if (thread_shared_data != NULL) {
     if (thread_shared_data->joined) return TID_ERROR;
     thread_shared_data->joined = true;
@@ -958,7 +951,7 @@ void pthread_exit(void) {
   while (e != list_end(lock_t_list)) {
     lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
     e = list_next(e);
-    if (lock_t_map->lock.holder == t) lock_release(&lock_t_map->lock); // TODO: Fix issue when current thread doesn't hold this lock
+    if (lock_t_map->lock.holder == t) lock_release(&lock_t_map->lock); 
   }
   
   lock_release(&(thread_current()->pcb->lock));
@@ -976,9 +969,7 @@ void pthread_exit(void) {
    now, it does nothing. */
 void pthread_exit_main(void) {
   struct thread* t = thread_current();
-  // lock_acquire(&(t->pcb->lock));
   thread_shared_data_t* thread_shared_data = find_thread_shared_data(&(t->pcb->thread_list), t->tid);
-  // lock_release(&(t->pcb->lock));
   sema_up(&(thread_shared_data->sema));
 
   int jl_size = (int) list_size(&(t->pcb->thread_list));
@@ -994,15 +985,11 @@ void pthread_exit_main(void) {
     }
   }
 
-  // lock_release(&(thread_current()->pcb->lock)); // TODO: Remove this
   for (int i = 0; i < counter; i++) {
     pthread_join(join_list[i]);
   }
-  // lock_acquire(&(thread_current()->pcb->lock)); // TODO: Remove this
 
-  // lock_acquire(&(t->pcb->lock));
   thread_shared_data_t* main_shared_data = find_thread_shared_data(&(t->pcb->thread_list), t->tid);
-  // lock_release(&(t->pcb->lock));
   if (main_shared_data != NULL) {
     list_remove(&(main_shared_data->elem));
     free(main_shared_data);
