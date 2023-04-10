@@ -321,7 +321,7 @@ void intr_handler(struct intr_frame* frame) {
   bool external;
   intr_handler_func* handler;
 
-  if (is_trap_from_userspace(frame) && thread_current()->pcb->should_exit > -1) {
+  if (is_trap_from_userspace(frame) && thread_current()->pcb->should_exit > -2) {
     lock_acquire(&(thread_current()->pcb->lock)); 
     if (is_main_thread(thread_current(), thread_current()->pcb)) {
       pthread_exit_main();

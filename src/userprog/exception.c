@@ -79,7 +79,14 @@ static void kill(struct intr_frame* f) {
              intr_name(f->vec_no));
       intr_dump_frame(f);
       f->eax = -1;
-      process_exit(-1);
+      // process_exit(-1);
+      thread_current()->pcb->should_exit = -1;
+      lock_acquire(&(thread_current()->pcb->lock));
+      if (is_main_thread(thread_current(), thread_current()->pcb)) {
+         pthread_exit_main();
+      } else {
+         pthread_exit();
+      }
       NOT_REACHED();
 
     case SEL_KCSEG:

@@ -105,7 +105,7 @@ void userprog_init(void) {
   lock_init(&(t->pcb->lock));
   success = t->pcb != NULL;
   t->pcb->is_parent = true;
-  t->pcb->should_exit = -1;
+  t->pcb->should_exit = -10;
   t->pcb->num_stack_pages = 1;
 
   /* Kill the kernel if we did not succeed */
@@ -205,7 +205,7 @@ static void start_process(void* args) {
     list_init(t->pcb->fd_list);    
     lock_init(&(t->pcb->lock));                   
     t->pcb->is_parent = false;
-    t->pcb->should_exit = -1;
+    t->pcb->should_exit = -10;    // when -1 or greater, means exit was called
     t->pcb->num_stack_pages = 1;
 
     // Continue initializing the PCB as normal
@@ -288,7 +288,7 @@ int process_wait(pid_t child_pid) {
 
   return status;
 }
-//I love foot fungus (burger king foot lettuce)
+
 /* Free the current process's resources. */
 void process_exit(int status) {
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
@@ -855,9 +855,7 @@ tid_t pthread_execute(stub_fun sf, pthread_fun tf, void* arg) {
   thread_start_args->pcb = t->pcb;
   
   tid_t tid = thread_create("joemama", PRI_DEFAULT, start_pthread, thread_start_args);
-  // lock_release(&(thread_current()->pcb->lock)); // TODO: May need to delete or add
   sema_down(&(thread_shared_data->sema));
-  // lock_acquire(&(thread_current()->pcb->lock)); // TODO: May need to delete or add
   free(thread_start_args);
   tid = thread_shared_data->tid;
   if (tid == TID_ERROR) {
@@ -1005,7 +1003,7 @@ void pthread_exit_main(void) {
 
   lock_release(&(thread_current()->pcb->lock));
 
-  if (t->pcb->should_exit >= 0) {
+  if (t->pcb->should_exit >= -1) {
     process_exit(t->pcb->should_exit);
   }
 
