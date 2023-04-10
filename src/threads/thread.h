@@ -113,6 +113,7 @@ struct thread {
   /* Shared between thread.c and synch.c. */
   struct list_elem elem;      /* List element. */
   struct list_elem sema_elem; /* List element for the waiting queue of a semaphore */
+  struct list_elem stack_elem;
 
 #ifdef USERPROG
   /* Owned by process.c. */

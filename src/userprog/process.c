@@ -100,6 +100,7 @@ void userprog_init(void) {
   list_push_back(&(t->pcb->thread_list), &(t->thread_shared_data->elem));
   list_init(&(t->pcb->lock_t_list));
   list_init(&(t->pcb->sema_t_list));
+  list_init(&(t->pcb->stack_list));
   list_init(t->pcb->fd_list);
   lock_init(&(t->pcb->lock));
   success = t->pcb != NULL;
@@ -197,6 +198,7 @@ static void start_process(void* args) {
     list_push_back(&(t->pcb->thread_list), &(t->thread_shared_data->elem));
     list_init(&(t->pcb->lock_t_list));
     list_init(&(t->pcb->sema_t_list));
+    list_init(&(t->pcb->stack_list));
     t->pcb->shared_data->pid = t->tid;
     t->pcb->fd_tracker = 3;
     t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1); 
@@ -273,9 +275,9 @@ int process_wait(pid_t child_pid) {
   if (shared_data == NULL) {  
     return -1;
   }
-  // lock_release(&(cur->pcb->lock)); // TODO: May need to delete or add back
+  lock_release(&(cur->pcb->lock)); // TODO: May need to delete or add back
   sema_down(&(shared_data->sema));
-  // lock_acquire(&(cur->pcb->lock)); // TODO: May need to delete or add back
+  lock_acquire(&(cur->pcb->lock)); // TODO: May need to delete or add back
   int status = shared_data->status;
 
   lock_acquire(&(shared_data->lock));
@@ -291,6 +293,7 @@ int process_wait(pid_t child_pid) {
 //I love foot fungus
 /* Free the current process's resources. */
 void process_exit(int status) {
+  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
   struct thread* cur = thread_current();
   uint32_t* pd;
   shared_data_t* shared_data = cur->pcb->shared_data;
@@ -780,12 +783,30 @@ bool setup_thread(void (**eip)(void), void** esp, stub_fun sfun, pthread_fun tfu
   uint8_t* kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   bool success = false;
   if (kpage != NULL) {
-    uint8_t* upage = ((uint8_t*)PHYS_BASE) - PGSIZE * (t->pcb->num_stack_pages+1);
+    // check if the address is in the stack_list
+    // if it isn't here - insert the page here
+    // if it is, increment the address by a page, and check again
+    int stack_start = 0;
+    struct list_elem *e;
+    bool not_found = true;
+    uint8_t* upage;
+    while (not_found) {
+      stack_start++;
+      upage = ((uint8_t*)PHYS_BASE) - PGSIZE * (stack_start+1);
+      not_found = false;
+      for (e = list_begin(&(t->pcb->stack_list)); e != list_end(&(t->pcb->stack_list)); e = list_next(e)) {
+        struct thread* t = list_entry(e, struct thread, stack_elem);
+        if (upage == t->user_stack) {
+          not_found = true;
+          break;
+        }
+      }
+    }
     success = install_page(upage, kpage, true);
     if (success) {
       t->user_stack = upage;
-      *esp = (uint8_t*)PHYS_BASE - PGSIZE * t->pcb->num_stack_pages;
-      t->pcb->num_stack_pages++;
+      *esp = (uint8_t*)PHYS_BASE - PGSIZE * stack_start;
+      list_push_back(&(t->pcb->stack_list), &(t->stack_elem));
 
       if (arg == NULL) {
         *(char*)*esp = NULL;
@@ -930,6 +951,7 @@ void pthread_exit(void) {
   uint8_t* rem_page = pagedir_get_page(t->pcb->pagedir, user_stack);
   palloc_free_page(rem_page);
   pagedir_clear_page(t->pcb->pagedir, user_stack);
+  list_remove(&(t->stack_elem));
 
   struct list* lock_t_list = &(t->pcb->lock_t_list);
   struct list_elem* e = list_begin(lock_t_list);
@@ -991,7 +1013,7 @@ void pthread_exit_main(void) {
   while (e != list_end(lock_t_list)) {
     lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
     e = list_next(e);
-    if (lock_t_map->lock.holder == t) lock_release(&lock_t_map->lock); // TODO: Fix issue when current thread doesn't hold this lock
+    if (lock_t_map->lock.holder == t) lock_release(&lock_t_map->lock); 
   }
 
   lock_release(&(thread_current()->pcb->lock));

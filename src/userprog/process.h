@@ -65,6 +65,7 @@ struct process {
   struct list thread_list;    /* List of kernel threads */
   struct list lock_t_list;    /* Mapping of lock_t to kernel lock */
   struct list sema_t_list;    /* Mapping of sema_t to kernel lock */
+  struct list stack_list;     /* List of user stacks */
   bool is_parent;
   int num_stack_pages;        /* How many pages are currently taken up under PHYS_BASE */
   int should_exit;           /* Indicator on if we should jump back to  */

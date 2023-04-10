@@ -91,7 +91,6 @@ static void syscall_handler(struct intr_frame* f) {
 
   if (!validity_check((void *) args, 4)) {
     f->eax = -1;
-    printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
     process_exit(-1);
   }
 
@@ -112,7 +111,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = args[1];
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -122,7 +120,6 @@ static void syscall_handler(struct intr_frame* f) {
         shutdown_power_off();
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -130,8 +127,6 @@ static void syscall_handler(struct intr_frame* f) {
     case SYS_EXIT:
       if (validity_check((void *) args, 8)) {
         f->eax = args[1];
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-        // process_exit(args[1]);
         lock_acquire(&(thread_current()->pcb->lock));
         thread_current()->pcb->should_exit = args[1];
         if (is_main_thread(thread_current(), thread_current()->pcb)) {
@@ -141,7 +136,6 @@ static void syscall_handler(struct intr_frame* f) {
         }
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -151,19 +145,17 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = process_execute(args[1]);
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
 
     case SYS_WAIT:
       if (validity_check((void *) args, 8)) {
-        // lock_acquire(&(thread_current()->pcb->lock)); // TODO: May need to delete or add back
+        lock_acquire(&(thread_current()->pcb->lock)); // TODO: May need to delete or add back
         f->eax = process_wait(args[1]);
-        // lock_release(&(thread_current()->pcb->lock)); // TODO: May need to delete or add back
+        lock_release(&(thread_current()->pcb->lock)); // TODO: May need to delete or add back
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -175,7 +167,6 @@ static void syscall_handler(struct intr_frame* f) {
         lock_release(glob_lock);
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -187,7 +178,6 @@ static void syscall_handler(struct intr_frame* f) {
         lock_release(glob_lock);
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -209,7 +199,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = fd;
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -229,7 +218,6 @@ static void syscall_handler(struct intr_frame* f) {
         }
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -267,7 +255,6 @@ static void syscall_handler(struct intr_frame* f) {
         }
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -296,7 +283,6 @@ static void syscall_handler(struct intr_frame* f) {
         }
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -314,7 +300,6 @@ static void syscall_handler(struct intr_frame* f) {
           }
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -332,7 +317,6 @@ static void syscall_handler(struct intr_frame* f) {
         }
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -352,7 +336,6 @@ static void syscall_handler(struct intr_frame* f) {
             }
       } else {
           f->eax = -1;
-          printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
           process_exit(-1);
       }
       break;
@@ -362,7 +345,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = sys_sum_to_e(args[1]);
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -374,7 +356,6 @@ static void syscall_handler(struct intr_frame* f) {
         lock_release(&(thread_current()->pcb->lock));
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -390,7 +371,6 @@ static void syscall_handler(struct intr_frame* f) {
         }
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -402,7 +382,6 @@ static void syscall_handler(struct intr_frame* f) {
         lock_release(&(thread_current()->pcb->lock));
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -421,7 +400,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = true;
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -437,7 +415,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = true;
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -453,7 +430,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = true;
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -471,7 +447,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = true;
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -487,7 +462,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = true;
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -503,7 +477,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = true;
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
@@ -513,7 +486,6 @@ static void syscall_handler(struct intr_frame* f) {
         f->eax = thread_current()->tid;
       } else {
         f->eax = -1;
-        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
       break;
