@@ -30,6 +30,14 @@ typedef int tid_t;
 struct list ready_list;
 struct thread* get_highest_priority(struct list* t_list);
 
+typedef struct thread_shared_data {
+  struct semaphore sema;         /* Used for joined waiting */
+  struct lock lock;              /* Used for critical sections (ex: ref_cnt) */
+  bool joined;                   /* Used to keep track of join status */
+  tid_t tid;                     /* Which thread this sd struct is associated with */
+  struct list_elem elem;         /* Necessary for list implementation */
+} thread_shared_data_t;
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -98,6 +106,9 @@ struct thread {
   int effective_priority;    /* Effective priority of the thread */
   struct list holding_list;  /* A list of locks the thread holds */
   struct thread* waiting;    /* Waiting on this thread (may be NULL) */
+
+  thread_shared_data_t* thread_shared_data; /* Used in same way as processes but for threads instead */
+  uint8_t* user_stack;                      /* User stack pointer (Used to free user stack) */
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem;      /* List element. */

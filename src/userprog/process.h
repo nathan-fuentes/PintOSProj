@@ -58,7 +58,7 @@ struct process {
   struct thread* main_thread; /* Pointer to main thread */
   shared_data_t* shared_data; /* Connects this process to its parent (if it has one) */
   struct list child_list;     /* List of shared_data* with child processes */
-  struct lock* lock;          /* Used for critical sections (ex: process's pagedir), not needed until Project 2 */
+  struct lock lock;          /* Used for critical sections (ex: process's pagedir), not needed until Project 2 */
   struct list* fd_list;       /* Ptr to file descriptor list struct */
   int fd_tracker;             /* Global file descriptor "counter" */
   struct file* file;          /* File ptr */
@@ -66,6 +66,8 @@ struct process {
   struct list lock_t_list;    /* Mapping of lock_t to kernel lock */
   struct list sema_t_list;    /* Mapping of sema_t to kernel lock */
   bool is_parent;
+  int num_stack_pages;        /* How many pages are currently taken up under PHYS_BASE */
+  int should_exit;           /* Indicator on if we should jump back to  */
 };
 
 void userprog_init(void);

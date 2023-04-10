@@ -131,7 +131,14 @@ static void syscall_handler(struct intr_frame* f) {
       if (validity_check((void *) args, 8)) {
         f->eax = args[1];
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
-        process_exit(args[1]);
+        // process_exit(args[1]);
+        lock_acquire(&(thread_current()->pcb->lock));
+        thread_current()->pcb->should_exit = args[1];
+        if (is_main_thread(thread_current(), thread_current()->pcb)) {
+          pthread_exit_main();
+        } else {
+          pthread_exit();
+        }
       } else {
         f->eax = -1;
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
@@ -359,12 +366,43 @@ static void syscall_handler(struct intr_frame* f) {
       break;
     
     case SYS_PT_CREATE:
+      if (validity_check((void *) args, 16)) {
+        lock_acquire(&(thread_current()->pcb->lock));
+        f->eax = pthread_execute(args[1], args[2], args[3]);
+        lock_release(&(thread_current()->pcb->lock));
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
       break;
   
     case SYS_PT_EXIT:
+      if (validity_check((void *) args, 4)) {
+        if (is_main_thread(thread_current(), thread_current()->pcb)) {
+          lock_acquire(&(thread_current()->pcb->lock));
+          pthread_exit_main();
+        } else {
+          lock_acquire(&(thread_current()->pcb->lock));
+          pthread_exit();
+        }
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
       break;
   
     case SYS_PT_JOIN:
+      if (validity_check((void *) args, 8)) {
+        lock_acquire(&(thread_current()->pcb->lock));
+        f->eax = pthread_join(args[1]);
+        lock_release(&(thread_current()->pcb->lock));
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
       break;
     
     case SYS_LOCK_INIT:
