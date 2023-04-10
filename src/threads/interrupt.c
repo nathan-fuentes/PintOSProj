@@ -322,6 +322,7 @@ void intr_handler(struct intr_frame* frame) {
   intr_handler_func* handler;
 
   if (is_trap_from_userspace(frame) && thread_current()->pcb->should_exit > -1) {
+    lock_acquire(&(thread_current()->pcb->lock)); // TODO: May need to remove this
     if (is_main_thread(thread_current(), thread_current()->pcb)) {
       pthread_exit_main();
     } else {

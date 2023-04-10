@@ -158,7 +158,9 @@ static void syscall_handler(struct intr_frame* f) {
 
     case SYS_WAIT:
       if (validity_check((void *) args, 8)) {
+        // lock_acquire(&(thread_current()->pcb->lock)); // TODO: May need to delete or add back
         f->eax = process_wait(args[1]);
+        // lock_release(&(thread_current()->pcb->lock)); // TODO: May need to delete or add back
       } else {
         f->eax = -1;
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);

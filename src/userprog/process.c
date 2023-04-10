@@ -273,7 +273,9 @@ int process_wait(pid_t child_pid) {
   if (shared_data == NULL) {  
     return -1;
   }
+  // lock_release(&(cur->pcb->lock)); // TODO: May need to delete or add back
   sema_down(&(shared_data->sema));
+  // lock_acquire(&(cur->pcb->lock)); // TODO: May need to delete or add back
   int status = shared_data->status;
 
   lock_acquire(&(shared_data->lock));
@@ -343,8 +345,7 @@ void process_exit(int status) {
     lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
     e = list_next(e);
     list_remove(&(lock_t_map->elem));
-    // if (lock_t_map->lock.holder == thread_current()) lock_release(&lock_t_map->lock); // TODO: Fix issue when current thread doesn't hold this lock
-    free(lock_t_map); // TODO: Reinstate this but make it work lel
+    free(lock_t_map); 
   }
 
   struct list* sema_t_list = &(cur->pcb->sema_t_list);
@@ -354,7 +355,7 @@ void process_exit(int status) {
     sema_t_map_t* sema_t_map = list_entry(e, sema_t_map_t, elem);
     e = list_next(e);
     list_remove(&(sema_t_map->elem));
-    // free(sema_t_map); // TODO: Reinstate this but make it work lel
+    free(sema_t_map); 
   }
 
   struct list* file_list = cur->pcb->fd_list;
@@ -789,7 +790,7 @@ bool setup_thread(void (**eip)(void), void** esp, stub_fun sfun, pthread_fun tfu
       if (arg == NULL) {
         *(char*)*esp = NULL;
       } else {
-        memcpy(*esp, arg, sizeof(char*));
+        memcpy(*esp, &arg, sizeof(char*));
       }
       *esp -= 4;
 
@@ -837,7 +838,9 @@ tid_t pthread_execute(stub_fun sf, pthread_fun tf, void* arg) {
   
   tid_t tid = thread_create("joemama", PRI_DEFAULT, start_pthread, thread_start_args);
   // TODO: May have to release and re-acquire lock here
+  // lock_release(&(thread_current()->pcb->lock)); // TODO: May need to delete or add
   sema_down(&(thread_shared_data->sema));
+  // lock_acquire(&(thread_current()->pcb->lock)); // TODO: May need to delete or add
   free(thread_start_args);
   tid = thread_shared_data->tid;
   if (tid == TID_ERROR) {
@@ -865,6 +868,7 @@ static void start_pthread(void* exec_) {
   t->thread_shared_data = thread_shared_data;
   struct intr_frame if_;
   t->pcb = pcb;
+  // t->pcb->pagedir = 0xc010e000; // Uncomment for Debugging (TODO: Delete Later)
   memset(&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
@@ -968,11 +972,11 @@ void pthread_exit_main(void) {
     }
   }
 
-  lock_release(&(thread_current()->pcb->lock));
+  // lock_release(&(thread_current()->pcb->lock)); // TODO: Remove this
   for (int i = 0; i < counter; i++) {
     pthread_join(join_list[i]);
   }
-  lock_acquire(&(thread_current()->pcb->lock));
+  // lock_acquire(&(thread_current()->pcb->lock)); // TODO: Remove this
 
   // lock_acquire(&(t->pcb->lock));
   thread_shared_data_t* main_shared_data = find_thread_shared_data(&(t->pcb->thread_list), t->tid);
