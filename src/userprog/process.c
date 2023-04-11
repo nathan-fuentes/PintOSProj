@@ -24,23 +24,14 @@
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp, const char* command);
-bool setup_thread(void (**eip)(void), void** esp, stub_fun sfun, pthread_fun tfun, void* arg);
+bool setup_thread(void (**eip)(void), void** esp);
 void init_shared_data(shared_data_t* shared_data);
 shared_data_t* find_shared_data(struct list* data_list, pid_t pid);
-thread_shared_data_t* find_thread_shared_data(struct list* data_list, tid_t tid);
 
 typedef struct start_args {
   shared_data_t* shared_data;
   char* file_name;
 } start_args_t;
-
-typedef struct thread_start_args {
-  stub_fun sfun;
-  pthread_fun tfun;
-  void* arg;
-  thread_shared_data_t* thread_shared_data;
-  struct process* pcb;
-} thread_start_args_t;
 
 void init_shared_data(shared_data_t* shared_data) {
   sema_init(&(shared_data->sema), 0);
@@ -62,18 +53,6 @@ shared_data_t* find_shared_data(struct list* data_list, pid_t pid) {
   return NULL;
 }
 
-thread_shared_data_t* find_thread_shared_data(struct list* data_list, tid_t tid) {
-  struct list_elem* e;
-
-  for (e = list_begin(data_list); e != list_end(data_list); e = list_next(e)) {
-    thread_shared_data_t* thread_shared_data = list_entry(e, thread_shared_data_t, elem);
-    if (tid == thread_shared_data->tid) {
-      return thread_shared_data;
-    }
-  }
-  return NULL;
-}
-
 /* Initializes user programs in the system by ensuring the main
    thread has a minimal PCB so that it can execute and wait for
    the first user process. Any additions to the PCB should be also
@@ -90,23 +69,9 @@ void userprog_init(void) {
   t->pcb = calloc(sizeof(struct process), 1);
   t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1);
   list_init(&(t->pcb->child_list));
-  list_init(&(t->pcb->thread_list));
-
-  t->thread_shared_data = calloc(1, sizeof(thread_shared_data_t));
-  sema_init(&(t->thread_shared_data->sema), 0);
-  lock_init(&(t->thread_shared_data->lock));
-  t->thread_shared_data->tid = t->tid;
-
-  list_push_back(&(t->pcb->thread_list), &(t->thread_shared_data->elem));
-  list_init(&(t->pcb->lock_t_list));
-  list_init(&(t->pcb->sema_t_list));
-  list_init(&(t->pcb->stack_list));
   list_init(t->pcb->fd_list);
-  lock_init(&(t->pcb->lock));
   success = t->pcb != NULL;
   t->pcb->is_parent = true;
-  t->pcb->should_exit = -10;
-  t->pcb->num_stack_pages = 1;
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
@@ -188,25 +153,11 @@ static void start_process(void* args) {
     t->pcb = new_pcb;
     t->pcb->shared_data = shared_data;
     list_init(&(t->pcb->child_list));
-    list_init(&(t->pcb->thread_list));
-
-    t->thread_shared_data = calloc(1, sizeof(thread_shared_data_t));
-    sema_init(&(t->thread_shared_data->sema), 0);
-    lock_init(&(t->thread_shared_data->lock));
-    t->thread_shared_data->tid = t->tid;
-    
-    list_push_back(&(t->pcb->thread_list), &(t->thread_shared_data->elem));
-    list_init(&(t->pcb->lock_t_list));
-    list_init(&(t->pcb->sema_t_list));
-    list_init(&(t->pcb->stack_list));
     t->pcb->shared_data->pid = t->tid;
     t->pcb->fd_tracker = 3;
     t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1); 
-    list_init(t->pcb->fd_list);    
-    lock_init(&(t->pcb->lock));                   
+    list_init(t->pcb->fd_list);                       
     t->pcb->is_parent = false;
-    t->pcb->should_exit = -10;    // when -1 or greater, means exit was called
-    t->pcb->num_stack_pages = 1;
 
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
@@ -270,12 +221,10 @@ static void start_process(void* args) {
 int process_wait(pid_t child_pid) {
   struct thread* cur = thread_current();
   shared_data_t* shared_data = find_shared_data(&(cur->pcb->child_list), child_pid);
-  if (shared_data == NULL) {  
+  if (shared_data == NULL) {
     return -1;
   }
-  lock_release(&(cur->pcb->lock));
   sema_down(&(shared_data->sema));
-  lock_acquire(&(cur->pcb->lock));
   int status = shared_data->status;
 
   lock_acquire(&(shared_data->lock));
@@ -291,7 +240,6 @@ int process_wait(pid_t child_pid) {
 
 /* Free the current process's resources. */
 void process_exit(int status) {
-  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, status);
   struct thread* cur = thread_current();
   uint32_t* pd;
   shared_data_t* shared_data = cur->pcb->shared_data;
@@ -338,24 +286,6 @@ void process_exit(int status) {
     if (child_shared_data->ref_cnt == 0) {
       free(child_shared_data);
     }
-  }
-
-  struct list* lock_t_list = &(cur->pcb->lock_t_list);
-  e = list_begin(lock_t_list);
-  while (e != list_end(lock_t_list)) {
-    lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
-    e = list_next(e);
-    list_remove(&(lock_t_map->elem));
-    free(lock_t_map); 
-  }
-
-  struct list* sema_t_list = &(cur->pcb->sema_t_list);
-  e = list_begin(sema_t_list);
-  while (e != list_end(sema_t_list)) {
-    sema_t_map_t* sema_t_map = list_entry(e, sema_t_map_t, elem);
-    e = list_next(e);
-    list_remove(&(sema_t_map->elem));
-    free(sema_t_map); 
   }
 
   struct list* file_list = cur->pcb->fd_list;
@@ -775,59 +705,7 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. You may find it necessary to change the
    function signature. */
-bool setup_thread(void (**eip)(void), void** esp, stub_fun sfun, pthread_fun tfun, void* arg) { 
-  struct thread* t = thread_current();
-  uint8_t* kpage = palloc_get_page(PAL_USER | PAL_ZERO);
-  bool success = false;
-  if (kpage != NULL) {
-    // check if the address is in the stack_list
-    // if it isn't here - insert the page here
-    // if it is, increment the address by a page, and check again
-    int stack_start = 0;
-    struct list_elem *e;
-    bool not_found = true;
-    uint8_t* upage;
-    while (not_found) {
-      stack_start++;
-      upage = ((uint8_t*)PHYS_BASE) - PGSIZE * (stack_start+1);
-      not_found = false;
-      for (e = list_begin(&(t->pcb->stack_list)); e != list_end(&(t->pcb->stack_list)); e = list_next(e)) {
-        struct thread* t = list_entry(e, struct thread, stack_elem);
-        if (upage == t->user_stack) {
-          not_found = true;
-          break;
-        }
-      }
-    }
-    success = install_page(upage, kpage, true);
-    if (success) {
-      t->user_stack = upage;
-      *esp = (uint8_t*)PHYS_BASE - PGSIZE * stack_start;
-      list_push_back(&(t->pcb->stack_list), &(t->stack_elem));
-
-      if (arg == NULL) {
-        *(char*)*esp = NULL;
-      } else {
-        memcpy(*esp, &arg, sizeof(char*));
-      }
-      *esp -= 4;
-
-      if (&tfun == NULL) {
-        *(char*)*esp = NULL;
-      } else {
-        memcpy(*esp, &tfun, sizeof(char*));
-      }
-      *esp -=4;
-
-      *(char*)*esp = NULL;
-      
-      *eip = (void (*)(void)) sfun;
-    } else {
-      palloc_free_page(kpage);
-    }
-  }
-  return success;
-}
+bool setup_thread(void (**eip)(void) UNUSED, void** esp UNUSED) { return false; }
 
 /* Starts a new thread with a new user stack running SF, which takes
    TF and ARG as arguments on its user stack. This new thread may be
@@ -838,32 +716,7 @@ bool setup_thread(void (**eip)(void), void** esp, stub_fun sfun, pthread_fun tfu
    This function will be implemented in Project 2: Multithreading and
    should be similar to process_execute (). For now, it does nothing.
    */
-tid_t pthread_execute(stub_fun sf, pthread_fun tf, void* arg) { 
-  // creating the thread_shared_data struct
-  struct thread* t = thread_current();
-  
-  thread_shared_data_t* thread_shared_data = (thread_shared_data_t*) calloc(sizeof(thread_shared_data_t), 1);
-  sema_init(&(thread_shared_data->sema), 0);
-  lock_init(&(thread_shared_data->lock));
-  thread_shared_data->joined = false;
-
-  thread_start_args_t* thread_start_args = (thread_start_args_t*) calloc(sizeof(thread_start_args_t), 1);
-  thread_start_args->sfun = sf;
-  thread_start_args->tfun = tf;
-  thread_start_args->arg = arg;
-  thread_start_args->thread_shared_data = thread_shared_data;
-  thread_start_args->pcb = t->pcb;
-  
-  tid_t tid = thread_create("joemama", PRI_DEFAULT, start_pthread, thread_start_args);
-  sema_down(&(thread_shared_data->sema));
-  free(thread_start_args);
-  tid = thread_shared_data->tid;
-  if (tid == TID_ERROR) {
-    free(thread_shared_data);
-    return tid;
-  }
-  return tid; 
-}
+tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSED) { return -1; }
 
 /* A thread function that creates a new user thread and starts it
    running. Responsible for adding itself to the list of threads in
@@ -871,36 +724,7 @@ tid_t pthread_execute(stub_fun sf, pthread_fun tf, void* arg) {
 
    This function will be implemented in Project 2: Multithreading and
    should be similar to start_process (). For now, it does nothing. */
-static void start_pthread(void* exec_) {
-  stub_fun sf = ((thread_start_args_t*) exec_)->sfun;
-  pthread_fun tf = ((thread_start_args_t*) exec_)->tfun;
-  void* arg = ((thread_start_args_t*) exec_)->arg;
-  thread_shared_data_t* thread_shared_data = ((thread_start_args_t*) exec_)->thread_shared_data;
-  struct process* pcb = ((thread_start_args_t*) exec_)->pcb;
-  
-  struct thread* t = thread_current();
-  thread_shared_data->tid = t->tid;
-  t->thread_shared_data = thread_shared_data;
-  struct intr_frame if_;
-  t->pcb = pcb;
-  memset(&if_, 0, sizeof if_);
-  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-  if_.cs = SEL_UCSEG;
-  if_.eflags = FLAG_IF | FLAG_MBS;
-  /* Load FPU. */
-  uint8_t temp[108];
-  asm("fsave (%0); fninit; fsave (%1); frstor (%2)" : : "g"(&temp), "g"(&if_.fpu), "g"(&temp));
-  process_activate();
-  if (!setup_thread(&if_.eip, &if_.esp, sf, tf, arg)) {
-    thread_shared_data->tid = TID_ERROR;
-    sema_up(&(thread_shared_data->sema));
-    thread_exit();
-  } else {
-    list_push_back(&(t->pcb->thread_list), &(t->thread_shared_data->elem));
-    sema_up(&(t->thread_shared_data->sema));
-    asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
-  }
-}
+static void start_pthread(void* exec_ UNUSED) {}
 
 /* Waits for thread with TID to die, if that thread was spawned
    in the same process and has not been waited on yet. Returns TID on
@@ -909,22 +733,7 @@ static void start_pthread(void* exec_) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid) { 
-  struct thread* t = thread_current();
-  thread_shared_data_t* thread_shared_data = find_thread_shared_data(&(t->pcb->thread_list), tid);
-  if (thread_shared_data != NULL) {
-    if (thread_shared_data->joined) return TID_ERROR;
-    thread_shared_data->joined = true;
-    lock_release(&(thread_current()->pcb->lock));
-    sema_down(&(thread_shared_data->sema));
-    lock_acquire(&(thread_current()->pcb->lock));
-    list_remove(&(thread_shared_data->elem));
-    tid_t tid = thread_shared_data->tid;
-    free(thread_shared_data);
-    return tid;
-  }
-  return TID_ERROR;
-}
+tid_t pthread_join(tid_t tid UNUSED) { return -1; }
 
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the
@@ -935,27 +744,7 @@ tid_t pthread_join(tid_t tid) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit(void) {
-  struct thread* t = thread_current();
-  uint8_t* user_stack = t->user_stack;
-
-  uint8_t* rem_page = pagedir_get_page(t->pcb->pagedir, user_stack);
-  palloc_free_page(rem_page);
-  pagedir_clear_page(t->pcb->pagedir, user_stack);
-  list_remove(&(t->stack_elem));
-
-  struct list* lock_t_list = &(t->pcb->lock_t_list);
-  struct list_elem* e = list_begin(lock_t_list);
-  while (e != list_end(lock_t_list)) {
-    lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
-    e = list_next(e);
-    if (lock_t_map->lock.holder == t) lock_release(&lock_t_map->lock); 
-  }
-  
-  lock_release(&(thread_current()->pcb->lock));
-  sema_up(&(t->thread_shared_data->sema));
-  thread_exit();
-}
+void pthread_exit(void) {}
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
    The main thread should wait on all threads in the process to
@@ -965,47 +754,4 @@ void pthread_exit(void) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit_main(void) {
-  struct thread* t = thread_current();
-  thread_shared_data_t* thread_shared_data = find_thread_shared_data(&(t->pcb->thread_list), t->tid);
-  sema_up(&(thread_shared_data->sema));
-
-  int jl_size = (int) list_size(&(t->pcb->thread_list));
-  tid_t join_list[jl_size];
-  int counter = 0;
-  
-  struct list_elem* e;
-  for (e = list_begin(&(t->pcb->thread_list)); e != list_end(&(t->pcb->thread_list)); e = list_next(e)) {
-    thread_shared_data_t* thread_shared_data = list_entry(e, thread_shared_data_t, elem);
-    if (thread_shared_data->tid != t->tid && !thread_shared_data->joined) {
-      join_list[counter] = thread_shared_data->tid;
-      counter ++;
-    }
-  }
-
-  for (int i = 0; i < counter; i++) {
-    pthread_join(join_list[i]);
-  }
-
-  thread_shared_data_t* main_shared_data = find_thread_shared_data(&(t->pcb->thread_list), t->tid);
-  if (main_shared_data != NULL) {
-    list_remove(&(main_shared_data->elem));
-    free(main_shared_data);
-  }
-
-  struct list* lock_t_list = &(t->pcb->lock_t_list);
-  e = list_begin(lock_t_list);
-  while (e != list_end(lock_t_list)) {
-    lock_t_map_t* lock_t_map = list_entry(e, lock_t_map_t, elem);
-    e = list_next(e);
-    if (lock_t_map->lock.holder == t) lock_release(&lock_t_map->lock); 
-  }
-
-  lock_release(&(thread_current()->pcb->lock));
-
-  if (t->pcb->should_exit >= -1) {
-    process_exit(t->pcb->should_exit);
-  }
-
-  process_exit(0);
-}
+void pthread_exit_main(void) {}

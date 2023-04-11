@@ -25,19 +25,6 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
 
-/* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
-struct list ready_list;
-struct thread* get_highest_priority(struct list* t_list);
-
-typedef struct thread_shared_data {
-  struct semaphore sema;         /* Used for joined waiting */
-  struct lock lock;              /* Used for critical sections (ex: ref_cnt) */
-  bool joined;                   /* Used to keep track of join status */
-  tid_t tid;                     /* Which thread this sd struct is associated with */
-  struct list_elem elem;         /* Necessary for list implementation */
-} thread_shared_data_t;
-
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -102,18 +89,9 @@ struct thread {
   uint8_t* stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
   struct list_elem allelem;  /* List element for all threads list. */
-  int64_t wakeup_time;       /* Time a thread should be woken up, used for sleep calcs */
-  int effective_priority;    /* Effective priority of the thread */
-  struct list holding_list;  /* A list of locks the thread holds */
-  struct thread* waiting;    /* Waiting on this thread (may be NULL) */
-
-  thread_shared_data_t* thread_shared_data; /* Used in same way as processes but for threads instead */
-  uint8_t* user_stack;                      /* User stack pointer (Used to free user stack) */
 
   /* Shared between thread.c and synch.c. */
-  struct list_elem elem;      /* List element. */
-  struct list_elem sema_elem; /* List element for the waiting queue of a semaphore */
-  struct list_elem stack_elem;
+  struct list_elem elem; /* List element. */
 
 #ifdef USERPROG
   /* Owned by process.c. */
@@ -165,7 +143,6 @@ void thread_foreach(thread_action_func*, void*);
 
 int thread_get_priority(void);
 void thread_set_priority(int);
-bool prio_cmp(const struct list_elem* a, const struct list_elem* b, void* aux);
 
 int thread_get_nice(void);
 void thread_set_nice(int);

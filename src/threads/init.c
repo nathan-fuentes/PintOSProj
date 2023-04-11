@@ -318,9 +318,7 @@ static void run_task(char** argv) {
 
   printf("Executing '%s':\n", task);
 #ifdef USERPROG
-  lock_acquire(&(thread_current()->pcb->lock)); 
   process_wait(process_execute(task));
-  lock_release(&(thread_current()->pcb->lock)); 
 #endif
   printf("Execution of '%s' complete.\n", task);
 }
