@@ -15,6 +15,10 @@ static void do_format(void);
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void filesys_init(bool format) {
+  lock_init(&cache_lock);
+  for (int i = 0; i < 64; i++) {
+    lock_init(&(buffer_cache[i].lock));
+  }
   fs_device = block_get_role(BLOCK_FILESYS);
   if (fs_device == NULL)
     PANIC("No file system device found, can't initialize file system.");
@@ -30,7 +34,20 @@ void filesys_init(bool format) {
 
 /* Shuts down the file system module, writing any unwritten data
    to disk. */
-void filesys_done(void) { free_map_close(); }
+void filesys_done(void) {
+  lock_acquire(&cache_lock);
+  for (int i = 0; i < 64; i++) {
+    cache_entry_t cur = buffer_cache[i];
+    cur.valid_bit = false;
+    if (cur.dirty_bit) {
+      lock_acquire(&cur.lock);
+      block_write(fs_device, cur.sector_number, &cur.data);
+      lock_release(&cur.lock);
+    }
+  }
+  lock_release(&cache_lock); 
+  free_map_close();
+}
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.

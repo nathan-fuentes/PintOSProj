@@ -4,8 +4,21 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
+#include "threads/synch.h"
 
 struct bitmap;
+
+typedef struct cache_entry {
+  block_sector_t sector_number;     /* Used for ID'ing the block */
+  bool dirty_bit;                   /* Indicates whether the block has been altered or not */
+  bool clock_bit;                   /* Used for clock algorithm */
+  bool valid_bit;                   /* Indicates whether this entry is in use */
+  struct lock lock;                 /* Cache Entry-Level Lock */
+  uint8_t data[BLOCK_SECTOR_SIZE];  /* Data of the block */
+} cache_entry_t;
+
+struct lock cache_lock; /* Cache-Level Lock */
+cache_entry_t buffer_cache[64]; /* Array representing Buffer Cache (may need to be on the heap, but should be good as a global variable) */
 
 void inode_init(void);
 bool inode_create(block_sector_t, off_t);
