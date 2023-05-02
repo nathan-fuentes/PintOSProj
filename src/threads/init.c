@@ -134,6 +134,10 @@ int main(void) {
   /* Initialize file system. */
   ide_init();
   locate_block_devices();
+  lock_init(&cache_lock);
+  for (int i = 0; i < 64; i++) {
+    lock_init(&(buffer_cache[i].lock));
+  }
   filesys_init(format_filesys);
 #endif
 

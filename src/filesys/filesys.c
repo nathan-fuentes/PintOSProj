@@ -15,10 +15,6 @@ static void do_format(void);
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void filesys_init(bool format) {
-  lock_init(&cache_lock);
-  for (int i = 0; i < 64; i++) {
-    lock_init(&(buffer_cache[i].lock));
-  }
   fs_device = block_get_role(BLOCK_FILESYS);
   if (fs_device == NULL)
     PANIC("No file system device found, can't initialize file system.");
@@ -37,12 +33,12 @@ void filesys_init(bool format) {
 void filesys_done(void) {
   lock_acquire(&cache_lock);
   for (int i = 0; i < 64; i++) {
-    cache_entry_t cur = buffer_cache[i];
-    cur.valid_bit = false;
-    if (cur.dirty_bit) {
-      lock_acquire(&cur.lock);
-      block_write(fs_device, cur.sector_number, &cur.data);
-      lock_release(&cur.lock);
+    // cache_entry_t cur = buffer_cache[i];
+    buffer_cache[i].valid_bit = false;
+    if (buffer_cache[i].dirty_bit) {
+      lock_acquire(&buffer_cache[i].lock);
+      block_write(fs_device, buffer_cache[i].sector_number, &buffer_cache[i].data);
+      lock_release(&buffer_cache[i].lock);
     }
   }
   lock_release(&cache_lock); 
