@@ -7,6 +7,7 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
@@ -89,6 +90,7 @@ void fsutil_extract(char** argv UNUSED) {
     int size;
 
     /* Read and parse ustar header. */
+    // cache_function(src, sector++, header, false, BLOCK_SECTOR_SIZE, 0);
     block_read(src, sector++, header);
     error = ustar_parse_header(header, &file_name, &type, &size);
     if (error != NULL)
@@ -114,6 +116,7 @@ void fsutil_extract(char** argv UNUSED) {
       /* Do copy. */
       while (size > 0) {
         int chunk_size = (size > BLOCK_SECTOR_SIZE ? BLOCK_SECTOR_SIZE : size);
+        // cache_function(src, sector++, data, false, BLOCK_SECTOR_SIZE, 0);
         block_read(src, sector++, data);
         if (file_write(dst, data, chunk_size) != chunk_size)
           PANIC("%s: write failed with %d bytes unwritten", file_name, size);
