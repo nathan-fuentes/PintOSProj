@@ -117,11 +117,12 @@ void cache_function(struct block* block, block_sector_t sector_number, void* buf
   
   // printf("Before Op\n");
   if (write) { // perform a write operation
-    memcpy((&(buffer_cache[idx].data)) + offset, buffer, size);
+    memcpy(buffer_cache[idx].data + offset, buffer, size);
   } else { // perform a read operation
-    memcpy(buffer, (&(buffer_cache[idx].data)) + offset, size);
+    memcpy(buffer, buffer_cache[idx].data + offset, size);
   }
   // printf("After Op\n");
+
   lock_release(&cache_lock);
 }
 
@@ -327,7 +328,8 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
 
     // if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE) {
     //   /* Read full sector directly into caller's buffer. */
-    //   block_read(fs_device, sector_idx, buffer + bytes_read);
+    //   // block_read(fs_device, sector_idx, buffer + bytes_read);
+    //   cache_function(fs_device, sector_idx, buffer + bytes_read, false, BLOCK_SECTOR_SIZE, 0);
     // } else {
     //   /* Read sector into bounce buffer, then partially copy
     //          into caller's buffer. */
@@ -336,7 +338,8 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
     //     if (bounce == NULL)
     //       break;
     //   }
-    //   block_read(fs_device, sector_idx, bounce);
+    //   // block_read(fs_device, sector_idx, bounce);
+    //   cache_function(fs_device, sector_idx, bounce, false, BLOCK_SECTOR_SIZE, 0);
     //   memcpy(buffer + bytes_read, bounce + sector_ofs, chunk_size);
     // }
 
@@ -382,7 +385,8 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 
     // if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE) {
     //   /* Write full sector directly to disk. */
-    //   block_write(fs_device, sector_idx, buffer + bytes_written);
+    //   // block_write(fs_device, sector_idx, buffer + bytes_written);
+    //   cache_function(fs_device, sector_idx, buffer + bytes_written, true, BLOCK_SECTOR_SIZE, 0);
     // } else {
     //   /* We need a bounce buffer. */
     //   if (bounce == NULL) {
@@ -395,11 +399,13 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     //          we're writing, then we need to read in the sector
     //          first.  Otherwise we start with a sector of all zeros. */
     //   if (sector_ofs > 0 || chunk_size < sector_left)
-    //     block_read(fs_device, sector_idx, bounce);
+    //     // block_read(fs_device, sector_idx, bounce);
+    //     cache_function(fs_device, sector_idx, bounce, false, BLOCK_SECTOR_SIZE, 0);
     //   else
     //     memset(bounce, 0, BLOCK_SECTOR_SIZE);
     //   memcpy(bounce + sector_ofs, buffer + bytes_written, chunk_size);
-    //   block_write(fs_device, sector_idx, bounce);
+    //   // block_write(fs_device, sector_idx, bounce);
+    //   cache_function(fs_device, sector_idx, bounce, true, BLOCK_SECTOR_SIZE, 0);
     // }
     cache_function(fs_device, sector_idx, buffer + bytes_written, true, chunk_size, sector_ofs);
 
