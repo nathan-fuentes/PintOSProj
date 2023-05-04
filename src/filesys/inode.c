@@ -192,10 +192,6 @@ bool inode_resize(struct inode_disk* id, off_t size) {
     /* Write the updates to the indirect block back to disk. */
     cache_function(fs_device, id->indirect, buffer, true, BLOCK_SECTOR_SIZE, 0);
   }
-  // DEBUG
-  if (size == 75678) {
-    printf("here\n");
-  }
   /* Check if doubly indirect pointers are needed. */
   if (id->doubly_indirect == 0 && size <= 140 * BLOCK_SECTOR_SIZE) {
     return true;
@@ -282,8 +278,8 @@ void find_idx(struct inode_disk* id, int* direct_idx, int* indirect_idx, off_t o
     *direct_idx = block_idx - 12;
     *indirect_idx = -1;
   } else {
-    *indirect_idx = (block_idx - num_dir_ptrs + entries_in_ind_ptr) / 128;
-    *direct_idx = (block_idx - num_dir_ptrs + entries_in_ind_ptr) % 128;
+    *indirect_idx = (block_idx - (num_dir_ptrs + entries_in_ind_ptr)) / 128;
+    *direct_idx = (block_idx - (num_dir_ptrs + entries_in_ind_ptr)) % 128;
   }
 }
 
