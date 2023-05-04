@@ -65,23 +65,29 @@ void cache_function(struct block* block, block_sector_t sector_number, void* buf
     if (buffer_cache[i].sector_number == sector_number && buffer_cache[i].valid_bit) {
       idx = i;
       update_bits(sector_number, i, write);
-      // lock_release(&cache_lock);
-      // lock_acquire(&(buffer_cache[i].lock));
+      lock_release(&cache_lock);
+      lock_acquire(&(buffer_cache[i].lock));
+      if (sector_number != buffer_cache[i].sector_number) {
+        // Entry invalid again, redo logic.
+        lock_release(&(buffer_cache[i].lock));
+        cache_function(block, sector_number, buffer, write, size, offset);
+        return;
+      }
       break;
     } else if (!buffer_cache[i].valid_bit) {
       idx = i;
       update_bits(sector_number, i, write);
-      // lock_release(&cache_lock);
-      // lock_acquire(&(buffer_cache[i].lock));
+      lock_release(&cache_lock);
+      lock_acquire(&(buffer_cache[i].lock));
       if (sector_number != buffer_cache[i].sector_number) {
         // Entry invalid again, redo logic.
-        // lock_release(&(buffer_cache[i].lock));
+        lock_release(&(buffer_cache[i].lock));
         cache_function(block, sector_number, buffer, write, size, offset);
         return;
       }
       block_read(block, sector_number, &(buffer_cache[i].data));
-      //lock_release(&(buffer_cache[i].lock));
-      //lock_acquire(&cache_lock);
+      // lock_release(&(buffer_cache[i].lock));
+      // lock_acquire(&cache_lock);
       break;
     }
   }
@@ -92,11 +98,11 @@ void cache_function(struct block* block, block_sector_t sector_number, void* buf
     bool old_dirty_bit = buffer_cache[idx].dirty_bit;
     block_sector_t old_sector_number = buffer_cache[idx].sector_number;
     update_bits(sector_number, idx, write);
-    // lock_release(&cache_lock);
-    // lock_acquire(&buffer_cache[idx].lock);
+    lock_release(&cache_lock);
+    lock_acquire(&buffer_cache[idx].lock);
     if (buffer_cache[idx].sector_number != sector_number) {
       // Entry invalid again, redo logic.
-      // lock_release(&buffer_cache[idx].lock);
+      lock_release(&buffer_cache[idx].lock);
       cache_function(block, sector_number, buffer, write, size, offset);
       return;
     }
@@ -114,8 +120,8 @@ void cache_function(struct block* block, block_sector_t sector_number, void* buf
     memcpy(buffer, buffer_cache[idx].data + offset, size);
   }
 
-  lock_release(&cache_lock);
-  // lock_release(&buffer_cache[idx].lock);
+  // lock_release(&cache_lock);
+  lock_release(&buffer_cache[idx].lock);
 }
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -541,8 +547,9 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
       lock_release(&inode->lock);
       return 0;
     }
+    cache_function(fs_device, inode->sector, disk_inode, true, BLOCK_SECTOR_SIZE, 0);
   } 
-
+  
   uint8_t zeroes[512];
   memset(zeroes, 0, 512);
   while (length_inode_old < offset) {
@@ -566,6 +573,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     length_inode_old += chunk_size;
   }
     
+  off_t new_inode_length = offset + size;
   while (size > 0) {
     
     /* Sector to write, starting byte offset within sector. */
@@ -573,7 +581,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
     /* Bytes left in inode, bytes left in sector, lesser of the two. */
-    off_t inode_left = inode_length(inode) - offset;
+    off_t inode_left = new_inode_length - offset;
     int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
     int min_left = inode_left < sector_left ? inode_left : sector_left;
 
