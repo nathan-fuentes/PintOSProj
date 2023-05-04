@@ -31,6 +31,7 @@ shared_data_t* find_shared_data(struct list* data_list, pid_t pid);
 typedef struct start_args {
   shared_data_t* shared_data;
   char* file_name;
+  struct dir* parent_cwd;
 } start_args_t;
 
 void init_shared_data(shared_data_t* shared_data) {
@@ -72,6 +73,7 @@ void userprog_init(void) {
   list_init(t->pcb->fd_list);
   success = t->pcb != NULL;
   t->pcb->is_parent = true;
+  t->pcb->cwd = NULL;
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
@@ -99,6 +101,7 @@ pid_t process_execute(const char* file_name) {
   start_args_t* start_args = (start_args_t*)calloc(sizeof(start_args_t), 1);
   start_args->file_name = fn_copy;
   start_args->shared_data = shared_data;
+  start_args->parent_cwd = thread_current()->pcb->cwd;
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, start_args);
@@ -158,6 +161,7 @@ static void start_process(void* args) {
     t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1); 
     list_init(t->pcb->fd_list);                       
     t->pcb->is_parent = false;
+    t->pcb->cwd = dir_reopen(sa->parent_cwd); // TODO: FIX THIS
 
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
@@ -292,19 +296,26 @@ void process_exit(int status) {
   e = list_begin(file_list);
   while (e != list_end(file_list)) {
     fd_map_t* fd_map = list_entry(e, fd_map_t, elem);
-    lock_acquire(glob_lock);
-    file_close(fd_map->file);
-    lock_release(glob_lock);
+    // lock_acquire(glob_lock);
+    if (fd_map->dir == NULL) {
+      file_close(fd_map->file);
+    } else {
+      dir_close(fd_map->dir);
+    }
+    // lock_release(glob_lock);
     e = list_next(e);
     list_remove(&(fd_map->elem));
     free(fd_map);
   }
   free(file_list);
 
+  /* Remove CWD association */
+  dir_close(cur->pcb->cwd);
+
   /* Close file */
-  lock_acquire(glob_lock);
+  // lock_acquire(glob_lock);
   file_close(cur->pcb->file);
-  lock_release(glob_lock);
+  // lock_release(glob_lock);
 
   bool is_parent = cur->pcb->is_parent;
 

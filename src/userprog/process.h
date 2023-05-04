@@ -30,6 +30,7 @@ typedef struct fd_map {
   int fd;                   /* "Key" file descriptor */
   struct file* file;        /* "Value" file pointer */
   struct list_elem elem;    /* Necessary for list implementation */
+  struct dir* dir;
 } fd_map_t;
 
 /* The process control block for a given process. Since
@@ -49,6 +50,7 @@ struct process {
   int fd_tracker;             /* Global file descriptor "counter" */
   struct file* file;          /* File ptr */
   bool is_parent;
+  struct dir* cwd;            /* Current Working Directory of this process */
 };
 
 void userprog_init(void);

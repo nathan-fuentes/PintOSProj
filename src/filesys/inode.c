@@ -139,6 +139,19 @@ struct inode {
   struct lock lock;
 };
 
+int open_cnt(struct inode* node) {
+  return node->open_cnt;
+}
+
+bool inode_is_dir(struct inode* node) {
+  struct inode_disk* disk_inode = NULL;
+  disk_inode = calloc(1, sizeof *disk_inode);
+  cache_function(fs_device, node->sector, disk_inode, false, BLOCK_SECTOR_SIZE, 0);
+  bool is_dir = disk_inode->is_directory > 0;
+  free(disk_inode);
+  return is_dir;
+}
+
 bool inode_resize(struct inode_disk* id, off_t size) {
   block_sector_t sector;
   /* Handle direct pointers. */
@@ -337,7 +350,7 @@ void inode_init(void) { list_init(&open_inodes); }
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length) {
+bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
   struct inode_disk* disk_inode = NULL;
   bool success = false;
 
@@ -365,6 +378,11 @@ bool inode_create(block_sector_t sector, off_t length) {
     //   }
     if (inode_resize(disk_inode, length)){
       disk_inode->length = length;
+      disk_inode->magic = INODE_MAGIC;
+      disk_inode->is_directory = 0;
+      if (is_dir) {
+        disk_inode->is_directory = 1;
+      }
       cache_function(fs_device, sector, disk_inode, true, BLOCK_SECTOR_SIZE, 0);
       success = true; 
     }

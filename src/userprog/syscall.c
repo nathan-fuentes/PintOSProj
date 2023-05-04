@@ -9,6 +9,7 @@
 #include "userprog/pagedir.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/directory.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
 #include "lib/float.h"
@@ -142,7 +143,10 @@ static void syscall_handler(struct intr_frame* f) {
     case SYS_REMOVE:
       if (validity_check((void *) args, 8) && validity_check((void *) args[1], 4)) {
         // lock_acquire(glob_lock);
-        f->eax = filesys_remove(args[1]);
+        // struct inode* inode = filesys_open_inode(args[1]);
+        // if (inode != NULL) {
+          f->eax = filesys_remove(args[1]);
+        // }
         // lock_release(glob_lock);
       } else {
         f->eax = -1;
@@ -154,15 +158,20 @@ static void syscall_handler(struct intr_frame* f) {
     case SYS_OPEN:
       if (validity_check((void *) args, 8) && validity_check((void *) args[1], 4)) {
         int fd = -1;
-        // lock_acquire(glob_lock);
-        struct file* file = filesys_open(args[1]);
+        struct inode* inode = filesys_open_inode(args[1]);
         // lock_release(glob_lock);
-        if (file != NULL) {
+        if (inode != NULL) {
           fd_map_t* fd_map = (fd_map_t *) calloc(sizeof(fd_map_t), 1);
           fd = thread_current()->pcb->fd_tracker;
           fd_map->fd = fd;
           thread_current()->pcb->fd_tracker++;
-          fd_map->file = file;
+          if (inode_is_dir(inode)) {
+            fd_map->file = NULL;
+            fd_map->dir = dir_open(inode);
+          } else {
+            fd_map->file = file_open(inode);
+            fd_map->dir = NULL;
+          }
           list_push_back(thread_current()->pcb->fd_list, &(fd_map->elem));
         }
         f->eax = fd;
@@ -200,7 +209,7 @@ static void syscall_handler(struct intr_frame* f) {
             f->eax = -1;
           } else {
             fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
-            if (fd_map == NULL) {
+            if (fd_map == NULL || fd_map->file == NULL) {
               f->eax = -1;
             } else {
               struct file* file = fd_map->file;
@@ -243,7 +252,7 @@ static void syscall_handler(struct intr_frame* f) {
             f->eax = -1;
           } else {
             fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
-            if (fd_map == NULL) {
+            if (fd_map == NULL || fd_map->file == NULL) {
               f->eax = -1;
             } else {
               struct file* file = fd_map->file;
@@ -302,9 +311,12 @@ static void syscall_handler(struct intr_frame* f) {
             if (fd_map == NULL) {
               f->eax = -1;
             } else {
-              struct file* file = fd_map->file;
+              if (fd_map->file == NULL) {
+                dir_close(fd_map->dir);
+              } else {
+                file_close(fd_map->file);
+              }
               // lock_acquire(glob_lock);
-              file_close(file);
               list_remove(&(fd_map->elem));
               // lock_release(glob_lock);
               free(fd_map);
@@ -324,5 +336,73 @@ static void syscall_handler(struct intr_frame* f) {
         printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
         process_exit(-1);
       }
+      break;
+    
+    case SYS_CHDIR: 
+      if (validity_check((void *) args, 8)) {
+        f->eax = filesys_chdir((char*)args[1]);
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+
+    case SYS_MKDIR:
+      if (validity_check((void *) args, 8)) {
+        f->eax = filesys_mkdir((char*)args[1]);
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+
+    case SYS_ISDIR:
+      if (validity_check((void *) args, 8)) {
+        fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
+        if (fd_map == NULL) {
+          f->eax = -1;
+        }
+        f->eax = fd_map->dir != NULL;
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+
+    case SYS_READDIR:
+      if (validity_check((void *) args, 12) && validity_check((void *) args[2], 4)) {
+        fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
+        if (fd_map == NULL || fd_map->dir == NULL || strlen(args[2]) > NAME_MAX + 1) {
+          f->eax = -1;
+        } else {
+          f->eax = dir_readdir(fd_map->dir, args[2]);
+        }
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+
+    case SYS_INUMBER:
+      if (validity_check((void *) args, 8) ) {
+        fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
+        if (fd_map == NULL) {
+          f->eax = -1;
+        } else {
+          if (fd_map->file == NULL) { // it's a directory
+            f->eax = inode_get_inumber(dir_get_inode(fd_map->dir));
+          } else {                    // it's a file
+            f->eax = inode_get_inumber(file_get_inode(fd_map->file));
+          }
+          
+        }
+      } else {
+        f->eax = -1;
+      }
+      break;
   }
 }
