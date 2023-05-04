@@ -65,6 +65,18 @@ struct inode* dir_get_inode(struct dir* dir) {
   return dir->inode;
 }
 
+int count_entries(const struct dir* dir) {
+  struct dir_entry e;
+  size_t ofs;
+  int count = 0;
+  ASSERT(dir != NULL);
+
+  for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) {
+    count ++;
+  }
+  return count;
+}
+
 /* Searches DIR for a file with the given NAME.
    If successful, returns true, sets *EP to the directory entry
    if EP is non-null, and sets *OFSP to the byte offset of the
@@ -192,6 +204,9 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
 
   while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
     dir->pos += sizeof e;
+    if (!strcmp(e.name, ".") || !strcmp(e.name, "..")) {
+      continue;
+    }
     if (e.in_use) {
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;

@@ -142,8 +142,10 @@ bool filesys_create(const char* name, off_t initial_size) {
 struct inode* filesys_open_inode(const char* name) {
   struct dir* dir;
   // struct dir* dir = dir_open_root();
+  bool root = false;
   if (name[0] == '/'){
     dir = dir_open_root();
+    root = true;
   } else {
     dir = dir_reopen(thread_current()->pcb->cwd);
   }
@@ -152,7 +154,11 @@ struct inode* filesys_open_inode(const char* name) {
   char part[NAME_MAX+1];
   memset(part, 0, NAME_MAX+1);
   int next = get_next_part(part, &name);
-
+  if (root && next == 0) {
+    inode = dir_get_inode(dir);
+    dir_close(dir);
+    return inode;
+  }
   while(next == 1) {
     if (dir == NULL) 
     inode = NULL;
@@ -251,7 +257,7 @@ bool filesys_remove(const char* name) { // TODO: THIS NEEDS MAJOR FIXING
     inode = NULL;
   }
   
-  if (inode == NULL || open_cnt(inode) > 1) {
+  if (inode == NULL || open_cnt(inode) > 2) {
     if (dir != NULL) dir_close(dir);
     if (old_dir != NULL) dir_close(old_dir);
     lock_release(&rm_lock);
@@ -260,7 +266,12 @@ bool filesys_remove(const char* name) { // TODO: THIS NEEDS MAJOR FIXING
 
   bool success;
   if (inode_is_dir(inode)) {
-    success = dir != NULL && dir_remove(old_dir, last_part);
+    if (count_entries(dir) == 2) {
+      success = dir != NULL && dir_remove(old_dir, last_part);
+    } else {
+      success = false;
+    }
+    
   } else {
     success = dir != NULL && dir_remove(dir, last_part);
   }
@@ -275,17 +286,23 @@ bool filesys_remove(const char* name) { // TODO: THIS NEEDS MAJOR FIXING
 bool filesys_chdir(const char* name) {
   struct dir* dir;
   // struct dir* dir = dir_open_root();
+  bool root = false;
   if (name[0] == '/'){
     dir = dir_open_root();
+    root = true;
   } else {
     dir = dir_reopen(thread_current()->pcb->cwd);
   }
-  
+
   struct inode* inode = NULL;
   char part[NAME_MAX+1];
   memset(part, 0, NAME_MAX+1);
   int next = get_next_part(part, &name);
-
+  if (root && next == 0) {
+    dir_close(thread_current()->pcb->cwd);
+    thread_current()->pcb->cwd = dir;
+    return true;
+  }
   while(next == 1) {
     inode = NULL;
     if (dir != NULL)

@@ -375,7 +375,7 @@ static void syscall_handler(struct intr_frame* f) {
     case SYS_READDIR:
       if (validity_check((void *) args, 12) && validity_check((void *) args[2], 4)) {
         fd_map_t* fd_map = find_fd_map(thread_current()->pcb->fd_list, args[1]);
-        if (fd_map == NULL || fd_map->dir == NULL || strlen(args[2]) > NAME_MAX + 1) {
+        if (fd_map == NULL || fd_map->dir == NULL) {
           f->eax = -1;
         } else {
           f->eax = dir_readdir(fd_map->dir, args[2]);
