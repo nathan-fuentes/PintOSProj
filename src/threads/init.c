@@ -40,6 +40,7 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #include "filesys/inode.h"
+#include "filesys/free-map.h"
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -138,6 +139,8 @@ int main(void) {
   for (int i = 0; i < 64; i++) {
     lock_init(&(buffer_cache[i].lock));
   }
+  lock_init(&free_map_lock);
+  lock_init(&inode_list_lock);
   filesys_init(format_filesys);
 #endif
 

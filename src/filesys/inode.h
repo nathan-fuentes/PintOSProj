@@ -18,6 +18,7 @@ typedef struct cache_entry {
 } cache_entry_t;
 
 struct lock cache_lock; /* Cache-Level Lock */
+struct lock inode_list_lock; /* Inode List Lock */
 cache_entry_t buffer_cache[64]; /* Array representing Buffer Cache (may need to be on the heap, but should be good as a global variable) */
 void cache_function(struct block* block, block_sector_t sector_number, void* buffer, bool write, off_t size, off_t offset);
 
