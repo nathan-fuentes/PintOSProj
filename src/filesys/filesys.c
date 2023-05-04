@@ -51,7 +51,7 @@ void filesys_init(bool format) {
 
   inode_init();
   free_map_init();
-
+  lock_init(&rm_lock);
   if (format)
     do_format();
 
@@ -230,6 +230,7 @@ bool filesys_remove(const char* name) { // TODO: THIS NEEDS MAJOR FIXING
   memset(last_part, 0, NAME_MAX+1);
   int next = get_next_part(part, &name);
 
+  lock_acquire(&rm_lock);
   while(next == 1) {
     inode = NULL;
     if (dir != NULL)
@@ -249,17 +250,14 @@ bool filesys_remove(const char* name) { // TODO: THIS NEEDS MAJOR FIXING
   if (next == -1) {
     inode = NULL;
   }
-  if (inode == NULL || open_cnt(inode) > 0) {
+  
+  if (inode == NULL || open_cnt(inode) > 1) {
     if (dir != NULL) dir_close(dir);
     if (old_dir != NULL) dir_close(old_dir);
+    lock_release(&rm_lock);
     return false;
   }
 
-  if (open_cnt(inode) > 0) {
-    if (dir != NULL) dir_close(dir);
-    if (old_dir != NULL) dir_close(old_dir);
-    return false;
-  }
   bool success;
   if (inode_is_dir(inode)) {
     success = dir != NULL && dir_remove(old_dir, last_part);
@@ -270,8 +268,8 @@ bool filesys_remove(const char* name) { // TODO: THIS NEEDS MAJOR FIXING
 
   dir_close(dir);
   dir_close(old_dir);
+  lock_release(&rm_lock);
   return success;
-
 }
 
 bool filesys_chdir(const char* name) {
