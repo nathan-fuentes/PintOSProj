@@ -125,7 +125,9 @@ bool filesys_create(const char* name, off_t initial_size) {
     next = get_next_part(part, &name);
   }
   if (next == -1) {
+    dir_close(dir);
     inode = NULL;
+    return false;
   }
   block_sector_t inode_sector = 0;
   bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
@@ -169,7 +171,11 @@ struct inode* filesys_open_inode(const char* name) {
   if (next == -1) {
     inode = NULL;
   }
-  dir_close(dir);
+  if (inode == NULL){
+    return NULL;
+  }
+  if (!inode_is_dir(inode))
+    dir_close(dir);
 
   return inode;
 }
