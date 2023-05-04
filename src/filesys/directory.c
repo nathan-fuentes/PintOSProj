@@ -72,7 +72,9 @@ int count_entries(const struct dir* dir) {
   ASSERT(dir != NULL);
 
   for (ofs = 0; inode_read_at(dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) {
-    count ++;
+    if (e.in_use) {
+      count ++;
+    }
   }
   return count;
 }
