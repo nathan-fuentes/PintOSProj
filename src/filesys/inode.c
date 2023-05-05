@@ -327,11 +327,6 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   free(id);
   return sector;
   
-  // TODO: Delete later
-  // if (pos < inode->data.length)
-  //   return inode->data.start + pos / BLOCK_SECTOR_SIZE;
-  // else
-  //   return -1;
 }
 
 /* List of open inodes, so that opening a single inode twice
@@ -358,20 +353,6 @@ bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
 
   disk_inode = calloc(1, sizeof *disk_inode);
   if (disk_inode != NULL) {
-    // size_t sectors = bytes_to_sectors(length);
-    // disk_inode->length = length;
-    // disk_inode->magic = INODE_MAGIC;
-    // if (free_map_allocate(sectors, &disk_inode->start)) {
-    //   cache_function(fs_device, sector, disk_inode, true, BLOCK_SECTOR_SIZE, 0);
-    //   // block_write(fs_device, sector, disk_inode);
-    //   if (sectors > 0) {
-    //     static char zeros[BLOCK_SECTOR_SIZE];
-    //     size_t i;
-
-    //     for (i = 0; i < sectors; i++)
-    //       cache_function(fs_device, disk_inode->start + i, zeros, true, BLOCK_SECTOR_SIZE, 0);
-    //       // block_write(fs_device, disk_inode->start + i, zeros);
-    //   }
     if (inode_resize(disk_inode, length)){
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
@@ -420,8 +401,6 @@ struct inode* inode_open(block_sector_t sector) {
   inode->removed = false;
   lock_init(&inode->lock);
   list_push_front(&open_inodes, &inode->elem);
-  // block_read(fs_device, inode->sector, &inode->data);
-  // cache_function(fs_device, inode->sector, &inode->data, false, BLOCK_SECTOR_SIZE, 0);
   lock_release(&inode_list_lock);
   return inode;
 }
@@ -460,7 +439,6 @@ void inode_close(struct inode* inode) {
       lock_release(&inode->lock);
       free(disk_inode);
       free_map_release(inode->sector, 1);
-      // free_map_release(inode->data.start, bytes_to_sectors(inode->data.length));
     }
 
     free(inode);
@@ -501,23 +479,6 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
     if (chunk_size <= 0)
       break;
 
-    // if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE) {
-    //   /* Read full sector directly into caller's buffer. */
-    //   // block_read(fs_device, sector_idx, buffer + bytes_read);
-    //   cache_function(fs_device, sector_idx, buffer + bytes_read, false, BLOCK_SECTOR_SIZE, 0);
-    // } else {
-    //   /* Read sector into bounce buffer, then partially copy
-    //          into caller's buffer. */
-    //   if (bounce == NULL) {
-    //     bounce = malloc(BLOCK_SECTOR_SIZE);
-    //     if (bounce == NULL)
-    //       break;
-    //   }
-    //   // block_read(fs_device, sector_idx, bounce);
-    //   cache_function(fs_device, sector_idx, bounce, false, BLOCK_SECTOR_SIZE, 0);
-    //   memcpy(buffer + bytes_read, bounce + sector_ofs, chunk_size);
-    // }
-
     cache_function(fs_device, sector_idx, buffer + bytes_read, false, chunk_size, sector_ofs);
 
     /* Advance. */
@@ -525,7 +486,6 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
     offset += chunk_size;
     bytes_read += chunk_size;
   }
-  // free(bounce); // TODO: Don't forget to delete this with bounce
 
   return bytes_read;
 }
