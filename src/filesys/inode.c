@@ -98,7 +98,7 @@ void cache_function(struct block* block, block_sector_t sector_number, void* buf
       cache_function(block, sector_number, buffer, write, size, offset);
       return;
     }
-    if (old_dirty_bit) {
+    if (true) {
       block_write(block, old_sector_number, &buffer_cache[idx].data);
     }
     block_read(block, sector_number, &buffer_cache[idx].data);
