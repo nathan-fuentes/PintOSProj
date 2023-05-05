@@ -384,12 +384,18 @@ bool filesys_mkdir(const char* name) {
     free_map_release(1, block_sector);
     return false;
   }
- 
-  struct dir* new_dir = dir_open(inode_open(block_sector));
-  if (new_dir == NULL || !dir_add(dir, part, block_sector)){
-    if (!dir_remove(dir, part)){
-      free_map_release(1, block_sector);
+  struct inode* new_inode = inode_open(block_sector);
+  struct dir* new_dir = dir_open(new_inode);
+  bool add = dir_add(dir, part, block_sector);
+  if (new_dir == NULL || !add) {
+    inode_remove(inode_open(block_sector));
+    if (new_dir != NULL) {
+      dir_close(new_dir);
+    } else {
+      inode_close(new_inode);
     }
+    free_map_release(1, block_sector);
+
     return false;
   }
   dir_add(new_dir, ".", block_sector);

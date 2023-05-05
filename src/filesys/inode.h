@@ -37,5 +37,7 @@ off_t inode_length(const struct inode*);
 
 int open_cnt(struct inode* node);
 bool inode_is_dir(struct inode* node);
+double get_cache_hit_rate(void);
+int fs_device_write_count(void);
 
 #endif /* filesys/inode.h */
