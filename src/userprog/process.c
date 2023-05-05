@@ -161,7 +161,12 @@ static void start_process(void* args) {
     t->pcb->fd_list = (struct list*)calloc(sizeof(struct list), 1); 
     list_init(t->pcb->fd_list);                       
     t->pcb->is_parent = false;
-    t->pcb->cwd = dir_reopen(sa->parent_cwd); // TODO: FIX THIS
+    if (sa->parent_cwd == NULL) {
+      t->pcb->cwd = dir_open_root();
+    } else {
+      t->pcb->cwd = dir_reopen(sa->parent_cwd);
+    }
+    // t->pcb->cwd = dir_reopen(sa->parent_cwd); // TODO: FIX THIS
 
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
