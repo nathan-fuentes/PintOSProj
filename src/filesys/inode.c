@@ -508,8 +508,9 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
     lock_acquired = true;
     cache_function(fs_device, inode->sector, disk_inode, false, BLOCK_SECTOR_SIZE, 0);
     bool success = inode_resize(disk_inode, offset + size);
+    lock_release(&inode->lock);
     if (!success) {
-      lock_release(&inode->lock);
+      // lock_release(&inode->lock);
       return 0;
     }
     cache_function(fs_device, inode->sector, disk_inode, true, BLOCK_SECTOR_SIZE, 0);
@@ -567,7 +568,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   if (lock_acquired) {
     disk_inode->length = offset + size;
     cache_function(fs_device, inode->sector, disk_inode, true, BLOCK_SECTOR_SIZE, 0);
-    lock_release(&inode->lock);
+    // lock_release(&inode->lock);
     free(disk_inode);
   }
     
