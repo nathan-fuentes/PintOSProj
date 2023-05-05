@@ -13,6 +13,8 @@
 
 int clock_hand = 0; /* Used for clock algorithm (may need to initialize in init.c) */
 
+static int cache_hits = 0;
+
 void update_bits(block_sector_t sector_number, int i, bool write);
 int clock_algorithm(void);
 
@@ -31,6 +33,11 @@ struct inode_disk {
 void find_idx(struct inode_disk* id, int* direct_idx, int* indirect_idx, off_t offset);
 bool inode_resize(struct inode_disk* id, off_t size);
 
+double get_cache_hit_rate(void) {
+  double result = cache_hits;
+  cache_hits = 0;
+  return result;
+}
 
 int clock_algorithm(void) {
   while (true) {
@@ -58,6 +65,7 @@ void cache_function(struct block* block, block_sector_t sector_number, void* buf
   for (int i = 0; i < 64; i++) {
     if (buffer_cache[i].sector_number == sector_number && buffer_cache[i].valid_bit) {
       idx = i;
+      cache_hits++;
       update_bits(sector_number, i, write);
       lock_release(&cache_lock);
       lock_acquire(&(buffer_cache[i].lock));
@@ -70,6 +78,7 @@ void cache_function(struct block* block, block_sector_t sector_number, void* buf
       break;
     } else if (!buffer_cache[i].valid_bit) {
       idx = i;
+  
       update_bits(sector_number, i, write);
       lock_release(&cache_lock);
       lock_acquire(&(buffer_cache[i].lock));
@@ -539,6 +548,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   }
     
   off_t new_inode_length = offset + size;
+  bool first = true;
   while (size > 0) {
     
     /* Sector to write, starting byte offset within sector. */
@@ -552,8 +562,12 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 
     /* Number of bytes to actually write into this sector. */
     int chunk_size = size < min_left ? size : min_left;
-    if (chunk_size <= 0)
-      break;
+    if (chunk_size <= 0) {
+      if (!first) {
+        break;
+      }
+    }
+    first = false;
 
     cache_function(fs_device, sector_idx, buffer + bytes_written, true, chunk_size, sector_ofs);
 
@@ -572,9 +586,6 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   }
     
   return bytes_written;
-  
-  //Implementation starts here
-  
 }
 
 /* Disables writes to INODE.
@@ -601,4 +612,8 @@ off_t inode_length(const struct inode* inode) {
   off_t len = disk_inode->length;
   free(disk_inode);
   return len; 
-  }
+}
+
+int fs_device_write_count(void) {
+  return get_write_count(fs_device);
+}

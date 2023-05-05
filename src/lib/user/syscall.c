@@ -158,3 +158,7 @@ void sema_up(sema_t* sema) {
 }
 
 tid_t get_tid(void) { return syscall0(SYS_GET_TID); }
+
+double cache_hit_rate(void) { return syscall0(SYS_CACHE_HIT_RATE);}
+
+int write_count(void) { return syscall0(SYS_WRITE_COUNT);}

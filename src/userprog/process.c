@@ -86,7 +86,6 @@ void userprog_init(void) {
 pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
-
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
@@ -127,6 +126,7 @@ pid_t process_execute(const char* file_name) {
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* args) {
+  // printf("we start\n");
   start_args_t* sa = (start_args_t*)args;
   shared_data_t* shared_data = sa->shared_data;
   char* og_file_name = sa->file_name;
@@ -163,9 +163,9 @@ static void start_process(void* args) {
     if (sa->parent_cwd == NULL) {
       t->pcb->cwd = dir_open_root();
     } else {
-      t->pcb->cwd = dir_reopen(sa->parent_cwd);
+      t->pcb->cwd = dir_reopen(sa->parent_cwd); 
     }
-
+    
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
     strlcpy(t->pcb->process_name, file_name,

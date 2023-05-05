@@ -10,6 +10,7 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "filesys/directory.h"
+#include "filesys/inode.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
 #include "lib/float.h"
@@ -378,6 +379,28 @@ static void syscall_handler(struct intr_frame* f) {
         }
       } else {
         f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+    
+    case SYS_CACHE_HIT_RATE:
+      if (validity_check((void *) args, 4) ) {
+        f->eax = get_cache_hit_rate();
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
+      }
+      break;
+    
+    case SYS_WRITE_COUNT:
+      if (validity_check((void *) args, 4) ) {
+        f->eax = fs_device_write_count();
+      } else {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->pcb->process_name, -1);
+        process_exit(-1);
       }
       break;
   }
